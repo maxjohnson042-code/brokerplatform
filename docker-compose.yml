@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: thriski
+      POSTGRES_PASSWORD: thriski
+      POSTGRES_DB: thriski
+    ports:
+      - "5432:5432"
+    volumes:
+      - thriski_pgdata:/var/lib/postgresql/data
+
+volumes:
+  thriski_pgdata:
