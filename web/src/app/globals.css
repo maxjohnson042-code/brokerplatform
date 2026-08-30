@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens for Thriski.
+ *
+ * This file is the single source of truth for colour in the product — see
+ * /design-system for a rendered reference of every token below. Two rules to keep it
+ * that way as the product grows:
+ *
+ *   1. Components reference tokens (bg-primary, text-status-warning-fg), never raw
+ *      Tailwind palette classes (bg-blue-600). A raw palette class in a component is
+ *      a sign a new token is needed, not a shortcut to take.
+ *   2. The five --status-* pairs are the ONLY colours allowed to represent a
+ *      lifecycle status (Section 8 of the master doc: profile, business,
+ *      accreditation and monitoring-item status all reduce to one of these five
+ *      meanings). See src/lib/status.ts, which maps every status enum value from the
+ *      backend to exactly one of these five — that mapping, not this file, is where a
+ *      new status value gets wired in.
+ */
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+
+  --primary: #14324f;
+  --primary-foreground: #ffffff;
+
+  --secondary: #eef2f6;
+  --secondary-foreground: #14324f;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+
+  --accent: #eef2f6;
+  --accent-foreground: #14324f;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2563eb;
+
+  /* Semantic status pairs — soft background + a text colour that passes WCAG AA
+     against it. "success" reads as current/verified/active; "warning" as needing
+     attention soon; "danger" as breached/blocked/declined; "info" as in-progress;
+     "neutral" as inactive/withdrawn/ended. See src/lib/status.ts for the full
+     enum-to-meaning mapping. */
+  --status-success-bg: #dcfce7;
+  --status-success-fg: #15803d;
+  --status-warning-bg: #fef3c7;
+  --status-warning-fg: #b45309;
+  --status-danger-bg: #fee2e2;
+  --status-danger-fg: #b91c1c;
+  --status-info-bg: #dbeafe;
+  --status-info-fg: #1d4ed8;
+  --status-neutral-bg: #f1f5f9;
+  --status-neutral-fg: #475569;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b1220;
+    --foreground: #e2e8f0;
+
+    --card: #111827;
+    --card-foreground: #e2e8f0;
+
+    --primary: #6ea3cd;
+    --primary-foreground: #0b1220;
+
+    --secondary: #1e293b;
+    --secondary-foreground: #e2e8f0;
+
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+
+    --accent: #1e293b;
+    --accent-foreground: #e2e8f0;
+
+    --destructive: #f87171;
+    --destructive-foreground: #1f2937;
+
+    --border: #1e293b;
+    --input: #1e293b;
+    --ring: #6ea3cd;
+
+    --status-success-bg: #0f2c1c;
+    --status-success-fg: #86efac;
+    --status-warning-bg: #3a2a0a;
+    --status-warning-fg: #fbbf24;
+    --status-danger-bg: #3a1212;
+    --status-danger-fg: #fca5a5;
+    --status-info-bg: #0f2a4a;
+    --status-info-fg: #93c5fd;
+    --status-neutral-bg: #1e293b;
+    --status-neutral-fg: #cbd5e1;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-fg: var(--status-success-fg);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-fg: var(--status-warning-fg);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-fg: var(--status-danger-fg);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-fg: var(--status-info-fg);
+  --color-status-neutral-bg: var(--status-neutral-bg);
+  --color-status-neutral-fg: var(--status-neutral-fg);
+
+  /* System-font stack — see layout.tsx's comment on why this isn't next/font/google. */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+* {
+  border-color: var(--border);
+}
