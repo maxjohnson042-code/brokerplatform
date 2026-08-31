@@ -26,6 +26,9 @@ import { PlatformAdminGuard } from './guards/platform-admin.guard';
     PlatformAdminOrgController,
   ],
   providers: [IdentityService, JwtAuthGuard, RolesGuard, MfaPendingGuard, PlatformAdminGuard],
-  exports: [IdentityService],
+  // JwtAuthGuard exported so other modules (BrokersModule, and later Epic 4+) can
+  // @UseGuards(JwtAuthGuard) on their own controllers without re-declaring it —
+  // CurrentAuthContext needs no export, it's a plain factory function, not a provider.
+  exports: [IdentityService, JwtAuthGuard],
 })
 export class IdentityModule {}
