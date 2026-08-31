@@ -33,15 +33,16 @@ async function main() {
   const suffix = randomUUID().slice(0, 8);
 
   console.log('\nSetting up: two lenders and one broker...');
-  const lenderA = await createClientOrganisation({ type: 'lender', name: `Lender A ${suffix}` });
-  const lenderB = await createClientOrganisation({ type: 'lender', name: `Lender B ${suffix}` });
-  const lenderAUser = await createClientUser({
+  const systemCtx = { actorType: 'system' as const };
+  const lenderA = await createClientOrganisation(systemCtx, { type: 'lender', name: `Lender A ${suffix}` });
+  const lenderB = await createClientOrganisation(systemCtx, { type: 'lender', name: `Lender B ${suffix}` });
+  const lenderAUser = await createClientUser(systemCtx, {
     clientOrganisationId: lenderA.id,
     email: `reviewer-a-${suffix}@example.com`,
     password: 'dev-password',
     role: 'reviewer',
   });
-  const lenderBUser = await createClientUser({
+  const lenderBUser = await createClientUser(systemCtx, {
     clientOrganisationId: lenderB.id,
     email: `reviewer-b-${suffix}@example.com`,
     password: 'dev-password',
