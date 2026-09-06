@@ -1,9 +1,13 @@
 # Thriski — context for coding agents
 
 This file is what a fresh Claude Code session should read first. It's the compressed
-version of `docs/Thriski - Master Requirements and Architecture Document v2.0.md`
-(also in this repo) — read that document in full before making any architectural
-decision; this file is a guardrail, not a substitute for it.
+version of `docs/Thriski - Master Requirements and Architecture Document v2.1.md`
+(also in this repo — supersedes v2.0, which is kept for history, not current) — read
+that document in full before making any architectural decision; this file is a
+guardrail, not a substitute for it. Also see `docs/Thriski - Information Architecture
+and Onboarding UX.md` for the onboarding-UX assessment behind Section 6.1a and the new
+ONB-013–017/BUS-024/IDV-015/DOC-009/REV-013/NFR-PER-3 requirement IDs — all currently
+**proposed, not committed** (OQ-45/46/47 track the confirmation decisions).
 
 ## What this is
 
@@ -51,12 +55,22 @@ document-management system.
 
 ## Where things stand
 
-- Release 1 backlog: `docs/Thriski - Release 1 Backlog.md`. Work through it epic by
-  epic — later epics assume earlier ones exist (e.g. accreditation, Epic 10, needs
-  relationships, Epic 8, and the ruleset engine, Epic 9, first).
+- Release 1 backlog: `docs/Thriski - Release 1 Backlog v2.md` (supersedes the
+  original — same epic sequence, each affected epic now cross-references the new
+  Section 6.1a requirement IDs). Work through it epic by epic — later epics assume
+  earlier ones exist (e.g. accreditation, Epic 10, needs relationships, Epic 8, and the
+  ruleset engine, Epic 9, first).
+- **Epics 1-4 built**: platform foundations, identity/auth (JWT + mandatory client-user
+  MFA), broker profile build, broker business onboarding (including the ABN-lookup
+  create/search flow below). Epic 5 (documents) is next in sequence.
 - ID&V provider: **Sumsub**, both KYC (individual) and KYB (business) — OQ-16
   resolved. Adapter shape is in `src/modules/verification/providers/`; the HTTP call
   itself is stubbed pending sandbox credentials (see that file's comment).
+- Business registry lookup (ONB-014/BUS-024): **Australia's ABN Lookup web service**,
+  a free self-registered GUID rather than a paid credential — see
+  `src/modules/businesses/providers/abn-lookup.provider.ts`. Unlike Sumsub this makes
+  a *real* call whenever `ABR_ABN_LOOKUP_GUID` is set (no sandbox tier to wait for);
+  degrades to an explicit `not_configured` result, never throws, when it isn't.
 - Open dependency: which register/bureau providers cover the non-Sumsub checks in
   Epic 7 (business/company registers, licence and credit-representative currency,
   banned-and-disqualified, adverse records, bankruptcy) is not yet decided.

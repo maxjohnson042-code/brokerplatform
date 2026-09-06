@@ -42,4 +42,14 @@ export const env = {
     resendApiKey: process.env.RESEND_API_KEY ?? '',
     fromAddress: process.env.EMAIL_FROM_ADDRESS ?? 'no-reply@thriski.local',
   },
+  // ONB-014/BUS-024 (Section 6.1a, OQ-45): Australia's ABN Lookup web service —
+  // free, public, a self-registered GUID rather than a paid/negotiated credential
+  // (see https://abr.business.gov.au/Tools/WebServices). Unlike Sumsub, there is no
+  // sandbox-vs-production distinction to stub around — src/modules/businesses/
+  // providers/abn-lookup.provider.ts makes a real call whenever this is set, and
+  // returns an explicit "not configured" result (never throws) when it isn't, so the
+  // manual-entry fallback always works either way.
+  abrAbnLookup: {
+    guid: process.env.ABR_ABN_LOOKUP_GUID ?? '',
+  },
 };

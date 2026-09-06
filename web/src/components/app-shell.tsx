@@ -12,6 +12,9 @@ import Link from "next/link";
 const NAV = [
   { href: "/design-system", label: "Design system" },
   { href: "/register", label: "Broker registration" },
+  { href: "/login", label: "Sign in" },
+  { href: "/profile", label: "My profile" },
+  { href: "/business", label: "My business" },
   { href: "/reviewer/queue", label: "Reviewer queue" },
 ] as const;
 

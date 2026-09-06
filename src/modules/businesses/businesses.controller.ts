@@ -18,27 +18,56 @@ import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard';
 import { CurrentAuthContext } from '../identity/decorators/current-auth-context.decorator';
 import { AuthorizationContext } from '../../db/authorization-context';
 import * as repo from './businesses.repository';
+import { BusinessesService } from './businesses.service';
+import { AbnLookupResult } from './providers/abn-lookup.provider';
 import { CreateBusinessDto } from './dto/create-business.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { AddPrincipalDto } from './dto/add-principal.dto';
 import { UpdatePrincipalDto } from './dto/update-principal.dto';
 import { EndAffiliationDto } from './dto/end-affiliation.dto';
 import { SearchBusinessesDto } from './dto/search-businesses.dto';
+import { LookupAbnDto } from './dto/lookup-abn.dto';
 
-// BUS-001-008, BUS-013-015: broker business onboarding. Static routes (search,
-// me/affiliations) are declared before the /: id routes they'd otherwise collide with
-// — Nest/Express matches in declaration order at the same path depth.
+// BUS-001-008, BUS-013-015, ONB-014/BUS-024: broker business onboarding. Static
+// routes (search, lookup, me/affiliations) are declared before the /:id routes they'd
+// otherwise collide with — Nest/Express matches in declaration order at the same path
+// depth.
 @Controller('businesses')
 @UseGuards(JwtAuthGuard)
 export class BusinessesController {
+  constructor(private readonly businessesService: BusinessesService) {}
+
   private requireBroker(ctx: AuthorizationContext): string {
     if (ctx.actorType !== 'broker') throw new UnauthorizedException();
     return ctx.actorId;
   }
 
+  /**
+   * ONB-014/BUS-024: "looked up... and offered for one-click confirmation, not
+   * typed." Standalone, so the frontend can show registry data before the broker
+   * commits to creating or searching anything — never throws on a bad/unconfigured
+   * lookup, always 200, so the caller can fall back to manual entry either way.
+   */
+  @Get('lookup')
+  async lookup(@Query() query: LookupAbnDto) {
+    return this.businessesService.lookupAbn(query.abn);
+  }
+
+  /**
+   * BUS-024: platform matches (to request affiliation) take priority; the national
+   * registry is only consulted when nothing on Thriski already matches — "one
+   * authoritative record per entity" (BUS-006) means a registry hit with an existing
+   * platform match should route the broker to affiliate, not to create a duplicate.
+   */
   @Get('search')
   async search(@Query() query: SearchBusinessesDto) {
-    return repo.searchVerifiedBusinesses(query);
+    const platformMatches = await repo.searchVerifiedBusinesses(query);
+    let registryMatch: AbnLookupResult | null = null;
+    if (query.abn && platformMatches.length === 0) {
+      const outcome = await this.businessesService.lookupAbn(query.abn);
+      if (outcome.status === 'found') registryMatch = outcome.result;
+    }
+    return { platformMatches, registryMatch };
   }
 
   @Post()

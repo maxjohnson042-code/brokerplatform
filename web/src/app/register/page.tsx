@@ -7,15 +7,16 @@ export default function RegisterPage() {
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
       <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Start your onboarding</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Create your account</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Takes about five minutes. You can save your progress and finish later.
+            AUTH-001. Once you&apos;re signed in you&apos;ll fill in your personal details, licensing record and
+            association membership — you can save progress and finish later.
           </p>
 
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>Personal details</CardTitle>
-              <CardDescription>ONB-003 — this information stays private until you choose to share it with a lender, aggregator or association.</CardDescription>
+              <CardTitle>Account details</CardTitle>
+              <CardDescription>Your email and password — used to sign in from now on.</CardDescription>
             </CardHeader>
             <CardContent>
               <RegisterForm />

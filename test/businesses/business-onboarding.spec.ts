@@ -163,7 +163,11 @@ describe('broker business onboarding (BUS-001/003-008/013-015)', () => {
       .get(`/businesses/search?abn=${abn}`)
       .set('Authorization', `Bearer ${joinerToken}`)
       .expect(200);
-    expect(found.body.map((b: { id: string }) => b.id)).toContain(created.body.id);
+    expect(found.body.platformMatches.map((b: { id: string }) => b.id)).toContain(created.body.id);
+    // A platform match already exists for this ABN, so BUS-006 ("one authoritative
+    // record per entity") means the registry isn't consulted — no duplicate-creation
+    // path is offered when one isn't needed.
+    expect(found.body.registryMatch).toBeNull();
 
     // Cannot yet read the full business — no affiliation, pending or otherwise.
     await request(app.getHttpServer())
@@ -213,5 +217,36 @@ describe('broker business onboarding (BUS-001/003-008/013-015)', () => {
       .post(`/businesses/me/affiliations/${affiliation.body.id}/end`)
       .set('Authorization', `Bearer ${founderToken}`)
       .expect(404);
+  });
+
+  it('ABN lookup degrades gracefully over HTTP when no registry GUID is configured (this test env\'s actual state)', async () => {
+    const token = await registerAndLogin(`lookup-${Date.now()}`);
+
+    const validAbn = await request(app.getHttpServer())
+      .get('/businesses/lookup?abn=51824753556')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(validAbn.body).toEqual({ status: 'not_configured' });
+
+    const invalidAbn = await request(app.getHttpServer())
+      .get('/businesses/lookup?abn=12345678901')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(invalidAbn.body).toEqual({ status: 'invalid_abn' });
+  });
+
+  it('search surfaces a registry match only when nothing on the platform already matches', async () => {
+    const token = await registerAndLogin(`search-registry-${Date.now()}`);
+
+    // No GUID configured in this test env, so even a well-formed, unused ABN comes
+    // back with no platform match AND no registry match (not_configured, not found) —
+    // proves the shape (platformMatches: [], registryMatch: null), not the live
+    // registry integration itself (covered without a real network call in
+    // abn-lookup.spec.ts).
+    const res = await request(app.getHttpServer())
+      .get('/businesses/search?abn=53004085616')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(res.body).toEqual({ platformMatches: [], registryMatch: null });
   });
 });
