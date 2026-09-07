@@ -15,6 +15,9 @@ const NAV = [
   { href: "/login", label: "Sign in" },
   { href: "/profile", label: "My profile" },
   { href: "/business", label: "My business" },
+  { href: "/relationships", label: "My relationships" },
+  { href: "/client-login", label: "Lender sign in" },
+  { href: "/client/relationships", label: "Broker panel" },
   { href: "/reviewer/queue", label: "Reviewer queue" },
 ] as const;
 

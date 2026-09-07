@@ -184,6 +184,94 @@ export function createBusiness(token: string, input: CreateBusinessInput): Promi
   return apiFetch("/businesses", { method: "POST", token, body: JSON.stringify(input) });
 }
 
+// ---- client_user auth (AUTH-002/006 — MFA is mandatory, never optional) ----
+
+export type MfaLoginPending = { pendingToken: string; tokenType: "mfa_pending" | "mfa_enrolment_pending" };
+export function loginClientUser(email: string, password: string): Promise<MfaLoginPending> {
+  return apiFetch("/auth/client/login", { method: "POST", body: JSON.stringify({ email, password }) });
+}
+
+export type MfaEnrolmentStart = { otpauthUri: string; secret: string; backupCodes: string[] };
+export function beginClientMfaEnrolment(pendingToken: string): Promise<MfaEnrolmentStart> {
+  return apiFetch("/auth/client/mfa/enroll", { method: "POST", token: pendingToken });
+}
+
+export function confirmClientMfaEnrolment(pendingToken: string, code: string): Promise<TokenPair> {
+  return apiFetch("/auth/client/mfa/enroll/confirm", { method: "POST", token: pendingToken, body: JSON.stringify({ code }) });
+}
+
+export function verifyClientMfa(pendingToken: string, code: string): Promise<TokenPair> {
+  return apiFetch("/auth/client/mfa/verify", { method: "POST", token: pendingToken, body: JSON.stringify({ code }) });
+}
+
+// ---- relationships (REL-001-007/010, src/modules/relationships) ----
+
+export type RelationshipType = "lender_panel" | "aggregator" | "association_membership";
+export type RelationshipStatus = "requested" | "pending_acceptance" | "active" | "declined" | "revoked" | "ended";
+
+export type MyRelationship = {
+  id: string;
+  broker_profile_id: string;
+  client_organisation_id: string;
+  type: RelationshipType;
+  status: RelationshipStatus;
+  shared_data_scope: string;
+  consented_at: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  end_reason: string | null;
+  created_at: string;
+  client_organisation_name: string | null;
+  client_organisation_type: string | null;
+};
+
+export type OrganisationRelationship = {
+  id: string;
+  broker_profile_id: string;
+  client_organisation_id: string;
+  type: RelationshipType;
+  status: RelationshipStatus;
+  shared_data_scope: string;
+  consented_at: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  end_reason: string | null;
+  created_at: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+};
+
+// broker actor
+export function listMyRelationships(token: string): Promise<MyRelationship[]> {
+  return apiFetch("/relationships/me", { token });
+}
+
+export function acceptInvitation(token: string, id: string, consentVersion: string): Promise<{ ok: true }> {
+  return apiFetch(`/relationships/${id}/accept`, { method: "POST", token, body: JSON.stringify({ consentVersion }) });
+}
+
+export function declineInvitation(token: string, id: string): Promise<{ ok: true }> {
+  return apiFetch(`/relationships/${id}/decline`, { method: "POST", token });
+}
+
+export function revokeRelationship(token: string, id: string, reason?: string): Promise<{ ok: true }> {
+  return apiFetch(`/relationships/${id}/revoke`, { method: "POST", token, body: JSON.stringify({ reason }) });
+}
+
+// client_user actor
+export function listOrganisationRelationships(token: string): Promise<OrganisationRelationship[]> {
+  return apiFetch("/relationships/organisation", { token });
+}
+
+export function inviteBroker(token: string, brokerEmail: string, type: RelationshipType): Promise<{ id: string }> {
+  return apiFetch("/relationships/invitations", { method: "POST", token, body: JSON.stringify({ brokerEmail, type }) });
+}
+
+export function endRelationship(token: string, id: string, reason: string): Promise<{ ok: true }> {
+  return apiFetch(`/relationships/${id}/end`, { method: "POST", token, body: JSON.stringify({ reason }) });
+}
+
 // ---- token storage ----
 // localStorage, deliberately simple — a real app would use httpOnly cookies + a
 // refresh flow; this scope is "prove the API works end to end in a browser," not a
@@ -202,4 +290,21 @@ export function storeToken(token: string): void {
 
 export function clearToken(): void {
   window.localStorage.removeItem(TOKEN_KEY);
+}
+
+// A separate key from the broker's — distinct actor types, so a browser session can
+// hold both a broker and a client_user token at once without one clobbering the other.
+const CLIENT_TOKEN_KEY = "thriski_client_access_token";
+
+export function getStoredClientToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(CLIENT_TOKEN_KEY);
+}
+
+export function storeClientToken(token: string): void {
+  window.localStorage.setItem(CLIENT_TOKEN_KEY, token);
+}
+
+export function clearClientToken(): void {
+  window.localStorage.removeItem(CLIENT_TOKEN_KEY);
 }
