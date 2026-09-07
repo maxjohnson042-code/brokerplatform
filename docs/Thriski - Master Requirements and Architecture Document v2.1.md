@@ -1035,6 +1035,55 @@ Rulesets must be versioned. When a client changes its ruleset, existing accredit
 
   
 
+### 9.1 The six dimensions of variance (G-14)
+
+The configurable list above states *that* lenders differ. It does not state *how*, and without that the ruleset engine cannot be designed — only guessed at. Analysis of accreditation documentation from Westpac Group, BOQ, NAB, Maple Asset Finance, Selfco and Firstmac found that variance is not a flat set of per-lender preferences. It runs along **six independent dimensions**, each of which multiplies against the others.
+
+  
+
+This matters because a ruleset keyed on `client_organisation` alone cannot express any of them. **G-14 is the requirement that the ruleset key be a composite of scope, subject and pathway — not a lender identifier.**
+
+  
+
+|  |  |  |
+| :-: | :-: | :-: |
+| \*\*\#\*\* | \*\*Dimension\*\* | \*\*Evidenced by\*\* |
+| \*\*D1\*\* | \*\*Scope granularity.\*\* An accreditation is for a brand-and-role combination, not for a lender | Westpac's single form covers five brands (Westpac Commercial, St George Group, Westpac Equipment Finance, CFAL, Westpac Insurance Broker), each selectable as Broker, Referrer or Professional Services Referrer. NAB distinguishes Equipment Finance ONLY from Commercial. BOQ spans six group entities |
+| \*\*D2\*\* | \*\*Accreditation subject.\*\* Whether the individual, the business, or both are the subject of assessment | Maple issues two separate forms with two separate checklists — Introducer (MCF1.01) and Broker Firm (MCF1.02). Westpac and NAB accredit the individual, with the aggregator or broker firm countersigning rather than being separately assessed |
+| \*\*D3\*\* | \*\*Document set, validity windows and thresholds.\*\* The same document type carries different currency rules and different minimums — and is sometimes substitutable | Police check: Westpac requires a clearance no older than \*\*180 days\*\*; Maple requires \*\*90 days\*\* \*\*or\*\* accepts recognised industry body membership \*\*instead\*\*. Selfco requires privacy consent no older than 90 days. NAB specifies PI cover of \*\*not less than $1,000,000 per claim and $2,000,000 in aggregate\*\*; other lenders state no figure |
+| \*\*D4\*\* | \*\*Eligibility rules conditional on D1.\*\* Requirements change according to the scope selected, within the same lender | NAB Commercial requires a resume evidencing \*\*2 years\*\* business banking experience; NAB Equipment Finance requires the same \*\*and\*\* CAFBA membership. Westpac makes association membership mandatory for CFAL, Equipment Finance and Commercial Broker, but requires \*\*degree qualification or professional association membership\*\* for Commercial Referrer instead |
+| \*\*D5\*\* | \*\*Pathway.\*\* New, transfer, or short-form — selected by what the lender already holds or by the applicant's prior status | NAB operates \*\*two distinct forms\*\*: a two-page form for brokers already holding NAB residential accreditation, and a five-page stand-alone form for everyone else. Westpac has a dedicated transfer section requiring an outgoing aggregator release letter. NAB applies a \*\*six-month active broker\*\* window to transfers. Maple requires a letter of separation |
+| \*\*D6\*\* | \*\*Declarations, consents and execution.\*\* The declaration set, the consents sought and the acceptable signing method all differ | Westpac's personal declaration runs to \*\*twelve lettered items\*\* (licence refusal, conviction, ASIC investigation, company liquidation, bankruptcy, partnership liquidation, membership refusal, disciplinary action, dismissal, PI claim, PI refusal, accreditation cancellation) and \*\*expressly refuses digital signatures\*\* for the applicant declaration while accepting them for direct agreement holder representatives. NAB instead seeks \*\*VEVO work-rights consent\*\* and, for Equipment Finance only, \*\*appointment as a limited agent under NAB's AML/CTF Program\*\*, plus AML certification and AFCA membership evidence |
+
+  
+
+### 9.2 Consequences for the data model
+
+Four design conclusions follow directly, and all four are cheaper to build now than to retrofit:
+
+  
+
+1.  **The ruleset key is composite.** `(client_organisation, brand, role, product_scope, pathway)` resolves to a ruleset version. A ruleset attached to a lender alone cannot express D1, D4 or D5 (ACR-003).
+2.  **Requirements are satisfiable by alternatives, not only by a named document.** Maple's police-check-or-membership rule and Westpac's association-or-degree rule are both `any_of` constraints. A required-documents list modelled as a flat set of mandatory types cannot represent either. The ruleset needs `all_of` / `any_of` / `conditional_on` as first-class constructs — still declarative JSON per Section 23, still no DSL.
+3.  **Validity windows and thresholds are ruleset data, not document-type properties.** A police check has no intrinsic currency period; 90 days and 180 days are both correct, for different lenders, over the same stored evidence. Section 7.3's `validity_period` therefore belongs on the ruleset's reference to the check, not on the check type itself.
+4.  **Declarations are stored as dated events and derived per lender.** Westpac's twelve items and NAB's four are different questions over the same underlying history. Storing a broker's yes/no answers to one lender's form makes the other lender's form unanswerable without re-asking. Store the events; derive each lender's declaration at render time (Section 6.1).
+
+  
+
+### 9.3 Release 1 acceptance test
+
+Section 23 already requires two seeded rulesets, one modelled on the Westpac worked example and one deliberately different. G-14 sharpens what "deliberately different" has to mean. **The second seeded ruleset should be NAB, because NAB alone exercises D1, D4, D5 and D6 — two brands of scope, scope-conditional eligibility, two pathways, and a declaration set with no overlap with Westpac's.**
+
+  
+
+The epic is not done until a NAB ruleset is expressible as configuration with no change to engine code. If it is not, the abstraction is wrong, and Release 1 is the cheapest moment in the platform's life to find that out. Treated as a design defect, not a backlog item.
+
+  
+
+**Why this is a Release 1 blocker rather than a Release 3 concern.** Reuse across lenders is deferred to Release 3, which makes it tempting to defer the configuration model with it. That is the wrong reading. Release 1's stated proof is that *a second ruleset is expressible without code changes* — the multi-lender data model has to be right before the second lender exists, because the alternative is that every subsequent lender is a development project and the platform is a consultancy with a product's cost base.
+
+  
+
 ## 10\. Association-specific requirements
 
 |  |  |  |
@@ -2297,3 +2346,10 @@ Conditions include: commissions inclusive of GST; upfront cap on term lending th
 6.  Understanding your responsibilities as an Introducer / Broker Code of Conduct, Oct 2015, Westpac
 7.  Commercial Introducer Broker Commission Rates, August 2020, Westpac
 8.  Broker requirements data and activity list (spreadsheet)
+9.  Westpac Group Commercial Accreditation — New and Transfer form (Multibrand), v1.2, 26 Feb 2023
+10.  BOQ Commercial Accreditation form, April 2025
+11.  NAB Commercial Broker Accreditation Form, June 2025 (short form — existing NAB residential brokers)
+12.  NAB Commercial Broker Stand Alone Commercial and/or Equipment Finance Accreditation Form, June 2025
+13.  Maple Asset Finance — Introducer Accreditation Form (MCF1.01) and Broker Firm Accreditation Form (MCF1.02)
+14.  Selfco Commercial Finance Application and Product Guide
+15.  Firstmac Secured Asset accreditation correspondence

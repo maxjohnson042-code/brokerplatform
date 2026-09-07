@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
+import { IdentityModule } from '../identity/identity.module';
+import { RelationshipsController } from './relationships.controller';
 
-// Client-initiated invitations (REL-003/004), revocation (REL-006/007) and the
-// visibility-resolution service extraction noted in migration 0007's closing comment
-// are Epic 8. requestRelationship() here is enough to prove the tenancy boundary in
-// Epic 1's demo script.
-@Module({})
+// REL-*: both relationship directions, status view, revoke/end. Imports
+// IdentityModule for JwtAuthGuard, same pattern every controller-bearing module has
+// used since Epic 3.
+@Module({
+  imports: [IdentityModule],
+  controllers: [RelationshipsController],
+})
 export class RelationshipsModule {}

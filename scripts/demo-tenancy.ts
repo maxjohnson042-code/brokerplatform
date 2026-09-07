@@ -56,7 +56,7 @@ async function main() {
   });
 
   console.log('Broker links to Lender A only...');
-  await requestRelationship({
+  await requestRelationship({ actorType: 'broker', actorId: broker.id }, {
     brokerProfileId: broker.id,
     clientOrganisationId: lenderA.id,
     type: 'lender_panel',
