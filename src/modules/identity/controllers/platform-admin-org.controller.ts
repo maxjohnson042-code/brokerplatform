@@ -5,16 +5,16 @@ import { CurrentAuthContext } from '../decorators/current-auth-context.decorator
 import { AuthorizationContext } from '../../../db/authorization-context';
 import * as repo from '../identity.repository';
 import { CreateClientOrganisationDto } from '../dto/create-client-organisation.dto';
-import { AssignRulesetDto } from '../dto/assign-ruleset.dto';
 import { SetProductScopesDto } from '../dto/set-product-scopes.dto';
 import { SetBrandingDto } from '../dto/set-branding.dto';
 import { CreateClientUserDto } from '../dto/create-client-user.dto';
 
 // W7: the internal tool Thriski operations uses to stand up the one Release-1 lender —
-// create, verify, configure (ruleset/product scopes/branding), then provision its
-// first client_admin so the org can self-serve via ClientUserAdminController from
-// there on. Deliberately not a client-facing feature (Section 6.7: "Administrative,
-// performed by Thriski operations").
+// create, verify, configure (product scopes/branding — ruleset assignment is
+// RulesetsController's job as of Epic 9), then provision its first client_admin so
+// the org can self-serve via ClientUserAdminController from there on. Deliberately
+// not a client-facing feature (Section 6.7: "Administrative, performed by Thriski
+// operations").
 @Controller('platform-admin/organisations')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class PlatformAdminOrgController {
@@ -26,12 +26,6 @@ export class PlatformAdminOrgController {
   @Post(':id/verify')
   async verify(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string) {
     await repo.verifyClientOrganisation(ctx, id);
-    return { ok: true };
-  }
-
-  @Patch(':id/ruleset')
-  async assignRuleset(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string, @Body() dto: AssignRulesetDto) {
-    await repo.updateClientOrganisationSetting(ctx, id, 'rulesetId', dto.rulesetId);
     return { ok: true };
   }
 

@@ -10,6 +10,7 @@
     "migrate:down": "ts-node db/migrate.ts down",
     "demo:tenancy": "ts-node scripts/demo-tenancy.ts",
     "seed:platform-admin": "ts-node scripts/seed-platform-admin.ts",
+    "seed:rulesets": "ts-node scripts/seed-rulesets.ts",
     "start:dev": "ts-node-dev --respawn src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",

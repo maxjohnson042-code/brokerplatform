@@ -155,13 +155,15 @@ export async function verifyClientOrganisation(
   });
 }
 
-export type ClientOrganisationSettingKey = 'rulesetId' | 'productScopes' | 'branding';
+export type ClientOrganisationSettingKey = 'productScopes' | 'branding';
 
 /**
- * W7 ruleset assignment / product scopes / branding. Written into the `settings` jsonb
- * column rather than dedicated columns — the ruleset engine itself is Epic 9, so
- * `rulesetId` here is necessarily a placeholder reference, not a foreign key into
- * anything that exists yet.
+ * W7 product scopes / branding. Written into the `settings` jsonb column rather than
+ * dedicated columns (Section 20.1: jsonb for config without schema churn). Ruleset
+ * assignment used to live here too as a placeholder ('rulesetId', a bare string with
+ * no foreign key) — Epic 9 replaced it with real ruleset_versions rows and the
+ * rulesets module's own resolve()/createDraft()/publish(), so the placeholder was
+ * removed rather than kept alongside the real mechanism.
  */
 export async function updateClientOrganisationSetting(
   ctx: AuthorizationContext,
