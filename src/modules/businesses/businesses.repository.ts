@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { PoolClient } from 'pg';
 import { withAuthorizationContext, AuthorizationContext } from '../../db/authorization-context';
 import { recordAuditEvent } from '../audit/audit.repository';
+import { flagPartyChanged } from '../accreditation/accreditation.repository';
 
 export class BusinessNotFoundError extends Error {
   constructor(id: string) {
@@ -475,7 +476,15 @@ export async function confirmAffiliation(
   });
 }
 
-/** BUS-014/015: a broker may only end THEIR OWN affiliation (leave) — never someone else's. Never deleted, per BUS-015. */
+/**
+ * BUS-014/015: a broker may only end THEIR OWN affiliation (leave) — never someone
+ * else's. Never deleted, per BUS-015.
+ *
+ * ACR-013 (Epic 10): this is the one place a business affiliation actually ends, so
+ * it's the natural place to flag every accreditation held through that (broker,
+ * business) pair as party_changed_pending — same transaction, one atomic write.
+ * flagPartyChanged takes the already-open client rather than opening its own.
+ */
 export async function endAffiliation(
   ctx: AuthorizationContext,
   brokerProfileId: string,
@@ -483,9 +492,10 @@ export async function endAffiliation(
   reason?: string,
 ): Promise<void> {
   return withAuthorizationContext(ctx, async (client) => {
-    const { rowCount } = await client.query(
+    const { rows, rowCount } = await client.query<{ broker_business_id: string }>(
       `UPDATE business_affiliations SET status = 'ended', ended_at = now(), end_reason = $3
-       WHERE id = $1 AND broker_profile_id = $2 AND status IN ('active', 'pending_confirmation')`,
+       WHERE id = $1 AND broker_profile_id = $2 AND status IN ('active', 'pending_confirmation')
+       RETURNING broker_business_id`,
       [affiliationId, brokerProfileId, reason ?? null],
     );
     if (rowCount === 0) throw new AffiliationNotFoundError(affiliationId);
@@ -497,6 +507,7 @@ export async function endAffiliation(
       subjectId: affiliationId,
       detail: { reason: reason ?? null },
     });
+    await flagPartyChanged(client, ctx, brokerProfileId, rows[0].broker_business_id, reason ?? 'business affiliation ended');
   });
 }
 
