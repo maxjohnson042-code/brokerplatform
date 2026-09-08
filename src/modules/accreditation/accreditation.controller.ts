@@ -18,10 +18,13 @@ import { AuthorizationContext } from '../../db/authorization-context';
 import { EMAIL_SENDER } from '../notifications/notifications.module';
 import { EmailSender } from '../notifications/email-sender';
 import * as repo from './accreditation.repository';
+import * as trainingRepo from './training.repository';
 import { RequestAccreditationDto } from './dto/request-accreditation.dto';
 import { QueueFiltersDto } from './dto/queue-filters.dto';
 import { RequestInformationDto } from './dto/request-information.dto';
 import { OptionalRationaleDto, DeclineDto, InterviewOutcomeDto } from './dto/decision.dto';
+import { ConfirmTrainingDto } from './dto/confirm-training.dto';
+import { CheckLapseDto } from './dto/check-lapse.dto';
 
 // ACR-*/REV-*: the four-party accreditation record and the lender review workbench.
 // Static routes (me, queue) declared before /:id, same ordering discipline as every
@@ -73,6 +76,15 @@ export class AccreditationController {
       classification: classification as repo.AccreditationClassification | undefined,
       productScope,
     });
+  }
+
+  // TRN-008: static route, declared before /:id per the same ordering discipline as
+  // every prior controller.
+  @Post('check-lapse')
+  async checkLapse(@CurrentAuthContext() ctx: AuthorizationContext, @Query() query: CheckLapseDto) {
+    this.requireClientUser(ctx);
+    const lapsedIds = await trainingRepo.checkTrainingDeadlines(ctx, query.lenderClientOrganisationId);
+    return { lapsedIds };
   }
 
   @Get(':id')
@@ -149,6 +161,37 @@ export class AccreditationController {
     this.requireClientUser(ctx);
     try {
       await repo.recordInterviewOutcome(ctx, id, dto.recommendation, dto.notes);
+    } catch (err) {
+      throw this.mapError(err);
+    }
+    return { ok: true };
+  }
+
+  @Get(':id/training-confirmations')
+  async trainingConfirmations(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string) {
+    try {
+      return await trainingRepo.listConfirmations(ctx, id);
+    } catch (err) {
+      throw this.mapError(err);
+    }
+  }
+
+  @Post(':id/confirm-training')
+  async confirmTraining(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string, @Body() dto: ConfirmTrainingDto) {
+    this.requireClientUser(ctx);
+    try {
+      await trainingRepo.confirmTraining(ctx, id, dto.kind, dto.notes);
+    } catch (err) {
+      throw this.mapError(err);
+    }
+    return { ok: true };
+  }
+
+  @Post(':id/activate')
+  async activate(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string) {
+    this.requireClientUser(ctx);
+    try {
+      await trainingRepo.activateAccreditation(ctx, id);
     } catch (err) {
       throw this.mapError(err);
     }

@@ -7,7 +7,15 @@ import { computeOutstandingRequirements } from '../rulesets/ruleset-evaluator';
 import { Fact, OutstandingRequirement, SubjectType } from '../rulesets/ruleset.types';
 
 export type AccreditationClassification = 'new_broker_introducer' | 'new_referrer_introducer' | 'transfer' | 'add_on';
-export type AccreditationStatus = 'requested' | 'information_required' | 'exception_escalated' | 'declined' | 'pending' | 'party_changed_pending';
+export type AccreditationStatus =
+  | 'requested'
+  | 'information_required'
+  | 'exception_escalated'
+  | 'declined'
+  | 'pending'
+  | 'party_changed_pending'
+  | 'active'
+  | 'lapsed';
 export type LicenceHolderType = 'aggregator_organisation' | 'broking_business' | 'third_party';
 export type DecisionStep = 'reviewer' | 'senior_approver';
 
@@ -34,6 +42,8 @@ export type Accreditation = {
   current_decision_step: DecisionStep;
   interview_recommendation: string | null;
   party_changed_at: string | null;
+  training_deadline_at: string | null;
+  activated_at: string | null;
   requested_at: string;
   decided_at: string | null;
   created_at: string;
@@ -82,7 +92,7 @@ export class InsufficientRoleError extends Error {
   }
 }
 
-function actorIdOf(ctx: AuthorizationContext): string | undefined {
+export function actorIdOf(ctx: AuthorizationContext): string | undefined {
   return 'actorId' in ctx ? ctx.actorId : undefined;
 }
 
@@ -224,7 +234,7 @@ export async function listMine(ctx: AuthorizationContext, brokerProfileId: strin
   });
 }
 
-async function getAccreditationOrThrow(client: PoolClient, id: string): Promise<Accreditation> {
+export async function getAccreditationOrThrow(client: PoolClient, id: string): Promise<Accreditation> {
   const { rows } = await client.query<Accreditation>(`SELECT * FROM accreditations WHERE id = $1`, [id]);
   if (!rows[0]) throw new AccreditationNotFoundError(id);
   return rows[0];
@@ -247,7 +257,7 @@ function assertNotTerminal(accreditation: Accreditation, attempted: string): voi
  * controller's requireClientUser() guard, same defense-in-depth reasoning as every
  * other repository function's own ownership checks in this codebase.
  */
-function assertClientUserOrSystem(ctx: AuthorizationContext): void {
+export function assertClientUserOrSystem(ctx: AuthorizationContext): void {
   if (ctx.actorType !== 'client_user' && ctx.actorType !== 'system') {
     throw new InsufficientRoleError('only a client organisation user may act on an accreditation');
   }
@@ -435,7 +445,19 @@ async function assertCanDecide(client: PoolClient, ctx: AuthorizationContext, ac
   if (role !== 'senior_approver') throw new InsufficientRoleError('only a senior_approver may act at this decision step');
 }
 
-/** approve stops at 'pending' — reaching 'active' is TRN-006, Epic 11's job, not this one's. */
+const DEFAULT_TRAINING_DEADLINE_DAYS = 60;
+
+/**
+ * approve stops at 'pending' — reaching 'active' is TRN-006 (Epic 11's
+ * activateAccreditation, an explicit lender action, not automatic on approval).
+ *
+ * Sets training_deadline_at here since approval is the natural moment W3 step 6/7
+ * ties it to ("on approval... required training is issued... platform tracks the
+ * deadline"). Epic 11 doesn't issue training content — only confirms it happened
+ * off-platform — so the only thing approval actually needs from the ruleset is a
+ * deadline length, read defensively (definition.training is intentionally still
+ * `unknown`, no formalized module catalogue) with a platform default if absent.
+ */
 export async function approve(ctx: AuthorizationContext, accreditationId: string, rationale?: string): Promise<{ brokerEmail: string }> {
   assertClientUserOrSystem(ctx);
   return withAuthorizationContext(ctx, async (client) => {
@@ -445,7 +467,22 @@ export async function approve(ctx: AuthorizationContext, accreditationId: string
     }
     await assertCanDecide(client, ctx, accreditation);
 
-    await client.query(`UPDATE accreditations SET status = 'pending', decided_at = now(), updated_at = now() WHERE id = $1`, [accreditationId]);
+    let deadlineDays = DEFAULT_TRAINING_DEADLINE_DAYS;
+    if (accreditation.ruleset_version_id) {
+      const { rows: rulesetRows } = await client.query(`SELECT definition FROM ruleset_versions WHERE id = $1`, [accreditation.ruleset_version_id]);
+      const training = rulesetRows[0]?.definition?.training;
+      if (training && typeof training === 'object' && typeof (training as { deadlineDays?: unknown }).deadlineDays === 'number') {
+        deadlineDays = (training as { deadlineDays: number }).deadlineDays;
+      }
+    }
+
+    await client.query(
+      `UPDATE accreditations
+       SET status = 'pending', decided_at = now(), updated_at = now(),
+           training_deadline_at = now() + ($2 * INTERVAL '1 day')
+       WHERE id = $1`,
+      [accreditationId, deadlineDays],
+    );
     await insertDecision(client, ctx, accreditationId, 'approved', { rationale });
     await recordAuditEvent(client, {
       actorType: ctx.actorType,
