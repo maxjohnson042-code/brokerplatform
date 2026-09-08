@@ -17,6 +17,7 @@ import { CurrentAuthContext } from '../identity/decorators/current-auth-context.
 import { AuthorizationContext } from '../../db/authorization-context';
 import { EMAIL_SENDER } from '../notifications/notifications.module';
 import { EmailSender } from '../notifications/email-sender';
+import { markSent } from '../notifications/notification.repository';
 import * as repo from './accreditation.repository';
 import * as trainingRepo from './training.repository';
 import { RequestAccreditationDto } from './dto/request-accreditation.dto';
@@ -50,12 +51,21 @@ export class AccreditationController {
     try {
       // dto's classification/licenceHolderType are validated by @IsIn against the
       // same vocabularies the repository's narrower types encode — safe to widen here.
-      return await repo.requestAccreditation(ctx, {
+      const { id, queueNotifications } = await repo.requestAccreditation(ctx, {
         brokerProfileId,
         ...dto,
         classification: dto.classification as repo.AccreditationClassification,
         licenceHolderType: dto.licenceHolderType as repo.LicenceHolderType,
       });
+      // NOT-002: every active client_user of the lender org gets a queue-entry email —
+      // best-effort, post-commit, same as every other Epic 12 dispatch.
+      for (const n of queueNotifications) {
+        if (n.shouldSend) {
+          await this.email.send(n.recipientEmail, n.subject, n.body);
+          await markSent(n.id);
+        }
+      }
+      return { id };
     } catch (err) {
       throw this.mapError(err);
     }
@@ -113,8 +123,11 @@ export class AccreditationController {
   ) {
     this.requireClientUser(ctx);
     try {
-      const { brokerEmail } = await repo.requestMoreInformation(ctx, id, dto.itemisedReasons);
-      await this.email.send(brokerEmail, 'More information needed for your accreditation', dto.itemisedReasons.join('\n'));
+      const { notificationId, recipientEmail, shouldSend, subject, body } = await repo.requestMoreInformation(ctx, id, dto.itemisedReasons);
+      if (shouldSend) {
+        await this.email.send(recipientEmail, subject, body);
+        await markSent(notificationId);
+      }
     } catch (err) {
       throw this.mapError(err);
     }
@@ -136,8 +149,11 @@ export class AccreditationController {
   async approve(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string, @Body() dto: OptionalRationaleDto) {
     this.requireClientUser(ctx);
     try {
-      const { brokerEmail } = await repo.approve(ctx, id, dto.rationale);
-      await this.email.send(brokerEmail, 'Your accreditation has been approved', 'Training details will follow shortly.');
+      const { notificationId, recipientEmail, shouldSend, subject, body } = await repo.approve(ctx, id, dto.rationale);
+      if (shouldSend) {
+        await this.email.send(recipientEmail, subject, body);
+        await markSent(notificationId);
+      }
     } catch (err) {
       throw this.mapError(err);
     }
@@ -148,8 +164,11 @@ export class AccreditationController {
   async decline(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string, @Body() dto: DeclineDto) {
     this.requireClientUser(ctx);
     try {
-      const { brokerEmail } = await repo.decline(ctx, id, dto.rationale);
-      await this.email.send(brokerEmail, 'Your accreditation was not approved', dto.rationale);
+      const { notificationId, recipientEmail, shouldSend, subject, body } = await repo.decline(ctx, id, dto.rationale);
+      if (shouldSend) {
+        await this.email.send(recipientEmail, subject, body);
+        await markSent(notificationId);
+      }
     } catch (err) {
       throw this.mapError(err);
     }
@@ -191,7 +210,11 @@ export class AccreditationController {
   async activate(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string) {
     this.requireClientUser(ctx);
     try {
-      await trainingRepo.activateAccreditation(ctx, id);
+      const { notificationId, recipientEmail, shouldSend, subject, body } = await trainingRepo.activateAccreditation(ctx, id);
+      if (shouldSend) {
+        await this.email.send(recipientEmail, subject, body);
+        await markSent(notificationId);
+      }
     } catch (err) {
       throw this.mapError(err);
     }

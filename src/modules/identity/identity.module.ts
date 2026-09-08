@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { IdentityService } from './identity.service';
@@ -16,8 +16,12 @@ import { PlatformAdminGuard } from './guards/platform-admin.guard';
 // on every sign/verify call in identity.service.ts rather than configured once here —
 // JwtModule.register({}) with no default secret keeps that the single source of truth
 // (see env.ts) instead of duplicating it into module config too.
+// Epic 12: NotificationsModule now also imports IdentityModule (for JwtAuthGuard, so
+// NotificationController can guard its own routes) — a genuine circular dependency
+// (Identity needs EMAIL_SENDER, Notifications needs JwtAuthGuard), resolved with
+// forwardRef() on both sides per Nest's standard pattern for this exact situation.
 @Module({
-  imports: [JwtModule.register({}), NotificationsModule],
+  imports: [JwtModule.register({}), forwardRef(() => NotificationsModule)],
   controllers: [
     BrokerAuthController,
     ClientAuthController,

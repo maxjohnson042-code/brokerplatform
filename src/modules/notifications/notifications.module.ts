@@ -1,5 +1,7 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConsoleEmailSender } from './email-sender';
+import { IdentityModule } from '../identity/identity.module';
+import { NotificationController } from './notification.controller';
 
 // NOT-*: broker and client notifications on submission, decisions, training issue.
 // Epic 12. Templating/delivery provider is an "unremarkable" integration per
@@ -12,6 +14,8 @@ import { ConsoleEmailSender } from './email-sender';
 export const EMAIL_SENDER = 'EMAIL_SENDER';
 
 @Module({
+  imports: [forwardRef(() => IdentityModule)],
+  controllers: [NotificationController],
   providers: [{ provide: EMAIL_SENDER, useClass: ConsoleEmailSender }],
   exports: [EMAIL_SENDER],
 })

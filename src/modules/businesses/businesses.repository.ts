@@ -3,6 +3,8 @@ import type { PoolClient } from 'pg';
 import { withAuthorizationContext, AuthorizationContext } from '../../db/authorization-context';
 import { recordAuditEvent } from '../audit/audit.repository';
 import { flagPartyChanged } from '../accreditation/accreditation.repository';
+import { createNotification } from '../notifications/notification.repository';
+import { businessSubmittedTemplate } from '../notifications/notification-templates';
 
 export class BusinessNotFoundError extends Error {
   constructor(id: string) {
@@ -329,7 +331,7 @@ export async function submitBusiness(
   ctx: AuthorizationContext,
   brokerProfileId: string,
   businessId: string,
-): Promise<void> {
+): Promise<{ notificationId: string; recipientEmail: string; shouldSend: boolean; subject: string; body: string }> {
   return withAuthorizationContext(ctx, async (client) => {
     const { rows } = await client.query(`SELECT status FROM broker_businesses WHERE id = $1`, [businessId]);
     if (rows.length === 0) throw new BusinessNotFoundError(businessId);
@@ -349,6 +351,20 @@ export async function submitBusiness(
       subjectType: 'broker_business',
       subjectId: businessId,
     });
+
+    // NOT-001: "brokers notified on submission" — logged atomically with the status
+    // change above, same fix as every other Epic 12 call site.
+    const { subject, body } = businessSubmittedTemplate();
+    const notification = await createNotification(client, ctx, {
+      recipientType: 'broker',
+      recipientId: brokerProfileId,
+      category: 'business_submitted',
+      subject,
+      body,
+      relatedRecordType: 'broker_business',
+      relatedRecordId: businessId,
+    });
+    return { notificationId: notification.id, recipientEmail: notification.recipientEmail, shouldSend: notification.shouldSend, subject, body };
   });
 }
 

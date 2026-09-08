@@ -5,6 +5,13 @@ import { recordAuditEvent } from '../audit/audit.repository';
 import { resolve as resolveRuleset } from '../rulesets/rulesets.repository';
 import { computeOutstandingRequirements } from '../rulesets/ruleset-evaluator';
 import { Fact, OutstandingRequirement, SubjectType } from '../rulesets/ruleset.types';
+import { createNotification } from '../notifications/notification.repository';
+import {
+  accreditationQueueEntryTemplate,
+  accreditationInformationRequiredTemplate,
+  accreditationApprovedTemplate,
+  accreditationDeclinedTemplate,
+} from '../notifications/notification-templates';
 
 export type AccreditationClassification = 'new_broker_introducer' | 'new_referrer_introducer' | 'transfer' | 'add_on';
 export type AccreditationStatus =
@@ -127,7 +134,7 @@ export async function requestAccreditation(
     licenceHolderName?: string;
     isCorporateCreditRepresentative?: boolean;
   },
-): Promise<{ id: string }> {
+): Promise<{ id: string; queueNotifications: Array<{ id: string; recipientEmail: string; shouldSend: boolean; subject: string; body: string }> }> {
   const pathway = input.classification === 'transfer' ? 'transfer' : 'new';
   const resolved = await resolveRuleset(
     { actorType: 'system' },
@@ -194,7 +201,38 @@ export async function requestAccreditation(
       detail: { classification: input.classification, brand: input.brand, role: input.role, productScope: input.productScope },
     });
 
-    return { id };
+    // NOT-002: "client users notified when a task enters their queue" — every active
+    // client_user of the lender org, one notification row each. No assignment/routing
+    // concept exists (see the Epic 12 plan's Scope decision on NOT-004), so the whole
+    // org is notified rather than a single reviewer.
+    const { rows: profileRows } = await client.query(`SELECT first_name, last_name FROM broker_profiles WHERE id = $1`, [input.brokerProfileId]);
+    const brokerName = profileRows[0] ? `${profileRows[0].first_name} ${profileRows[0].last_name}` : 'A broker';
+    const { subject: queueSubject, body: queueBody } = accreditationQueueEntryTemplate({ brokerName, classification: input.classification });
+    // client_users_visibility has no broker branch (a broker has no reason to read
+    // arbitrary client_user rows in general) — this specific lookup is a system-level
+    // "who do we notify" query triggered by the broker's own action, same escalate-
+    // and-restore shape as createNotification/flagPartyChanged.
+    await client.query(`SELECT set_config('app.actor_type', 'system', true)`);
+    const { rows: clientUserRows } = await client.query(
+      `SELECT id FROM client_users WHERE client_organisation_id = $1 AND is_active = true`,
+      [input.lenderClientOrganisationId],
+    );
+    await client.query(`SELECT set_config('app.actor_type', $1, true)`, [ctx.actorType]);
+    const queueNotifications = [];
+    for (const row of clientUserRows) {
+      const notification = await createNotification(client, ctx, {
+        recipientType: 'client_user',
+        recipientId: row.id,
+        category: 'accreditation_queue_entry',
+        subject: queueSubject,
+        body: queueBody,
+        relatedRecordType: 'accreditation',
+        relatedRecordId: id,
+      });
+      queueNotifications.push({ ...notification, subject: queueSubject, body: queueBody });
+    }
+
+    return { id, queueNotifications };
   });
 }
 
@@ -355,11 +393,6 @@ export async function getOutstandingItems(ctx: AuthorizationContext, accreditati
   });
 }
 
-async function getBrokerEmail(client: PoolClient, brokerProfileId: string): Promise<string> {
-  const { rows } = await client.query(`SELECT email FROM broker_profiles WHERE id = $1`, [brokerProfileId]);
-  return rows[0].email as string;
-}
-
 async function insertDecision(
   client: PoolClient,
   ctx: AuthorizationContext,
@@ -386,7 +419,7 @@ export async function requestMoreInformation(
   ctx: AuthorizationContext,
   accreditationId: string,
   itemisedReasons: string[],
-): Promise<{ brokerEmail: string }> {
+): Promise<{ notificationId: string; recipientEmail: string; shouldSend: boolean; subject: string; body: string }> {
   assertClientUserOrSystem(ctx);
   return withAuthorizationContext(ctx, async (client) => {
     const accreditation = await getAccreditationOrThrow(client, accreditationId);
@@ -403,7 +436,18 @@ export async function requestMoreInformation(
       clientOrganisationId: accreditation.lender_client_organisation_id,
       detail: { itemisedReasons },
     });
-    return { brokerEmail: await getBrokerEmail(client, accreditation.broker_profile_id) };
+
+    const { subject, body } = accreditationInformationRequiredTemplate({ itemisedReasons });
+    const notification = await createNotification(client, ctx, {
+      recipientType: 'broker',
+      recipientId: accreditation.broker_profile_id,
+      category: 'accreditation_information_required',
+      subject,
+      body,
+      relatedRecordType: 'accreditation',
+      relatedRecordId: accreditationId,
+    });
+    return { notificationId: notification.id, recipientEmail: notification.recipientEmail, shouldSend: notification.shouldSend, subject, body };
   });
 }
 
@@ -458,7 +502,11 @@ const DEFAULT_TRAINING_DEADLINE_DAYS = 60;
  * deadline length, read defensively (definition.training is intentionally still
  * `unknown`, no formalized module catalogue) with a platform default if absent.
  */
-export async function approve(ctx: AuthorizationContext, accreditationId: string, rationale?: string): Promise<{ brokerEmail: string }> {
+export async function approve(
+  ctx: AuthorizationContext,
+  accreditationId: string,
+  rationale?: string,
+): Promise<{ notificationId: string; recipientEmail: string; shouldSend: boolean; subject: string; body: string }> {
   assertClientUserOrSystem(ctx);
   return withAuthorizationContext(ctx, async (client) => {
     const accreditation = await getAccreditationOrThrow(client, accreditationId);
@@ -493,11 +541,26 @@ export async function approve(ctx: AuthorizationContext, accreditationId: string
       clientOrganisationId: accreditation.lender_client_organisation_id,
       detail: { rationale: rationale ?? null },
     });
-    return { brokerEmail: await getBrokerEmail(client, accreditation.broker_profile_id) };
+
+    const { subject, body } = accreditationApprovedTemplate();
+    const notification = await createNotification(client, ctx, {
+      recipientType: 'broker',
+      recipientId: accreditation.broker_profile_id,
+      category: 'accreditation_approved',
+      subject,
+      body,
+      relatedRecordType: 'accreditation',
+      relatedRecordId: accreditationId,
+    });
+    return { notificationId: notification.id, recipientEmail: notification.recipientEmail, shouldSend: notification.shouldSend, subject, body };
   });
 }
 
-export async function decline(ctx: AuthorizationContext, accreditationId: string, rationale: string): Promise<{ brokerEmail: string }> {
+export async function decline(
+  ctx: AuthorizationContext,
+  accreditationId: string,
+  rationale: string,
+): Promise<{ notificationId: string; recipientEmail: string; shouldSend: boolean; subject: string; body: string }> {
   assertClientUserOrSystem(ctx);
   return withAuthorizationContext(ctx, async (client) => {
     const accreditation = await getAccreditationOrThrow(client, accreditationId);
@@ -517,7 +580,18 @@ export async function decline(ctx: AuthorizationContext, accreditationId: string
       clientOrganisationId: accreditation.lender_client_organisation_id,
       detail: { rationale },
     });
-    return { brokerEmail: await getBrokerEmail(client, accreditation.broker_profile_id) };
+
+    const { subject, body } = accreditationDeclinedTemplate({ rationale });
+    const notification = await createNotification(client, ctx, {
+      recipientType: 'broker',
+      recipientId: accreditation.broker_profile_id,
+      category: 'accreditation_declined',
+      subject,
+      body,
+      relatedRecordType: 'accreditation',
+      relatedRecordId: accreditationId,
+    });
+    return { notificationId: notification.id, recipientEmail: notification.recipientEmail, shouldSend: notification.shouldSend, subject, body };
   });
 }
 

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
@@ -17,6 +18,9 @@ import {
 import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard';
 import { CurrentAuthContext } from '../identity/decorators/current-auth-context.decorator';
 import { AuthorizationContext } from '../../db/authorization-context';
+import { EMAIL_SENDER } from '../notifications/notifications.module';
+import { EmailSender } from '../notifications/email-sender';
+import { markSent } from '../notifications/notification.repository';
 import * as repo from './businesses.repository';
 import { BusinessesService } from './businesses.service';
 import { AbnLookupResult } from './providers/abn-lookup.provider';
@@ -35,7 +39,10 @@ import { LookupAbnDto } from './dto/lookup-abn.dto';
 @Controller('businesses')
 @UseGuards(JwtAuthGuard)
 export class BusinessesController {
-  constructor(private readonly businessesService: BusinessesService) {}
+  constructor(
+    private readonly businessesService: BusinessesService,
+    @Inject(EMAIL_SENDER) private readonly email: EmailSender,
+  ) {}
 
   private requireBroker(ctx: AuthorizationContext): string {
     if (ctx.actorType !== 'broker') throw new UnauthorizedException();
@@ -130,7 +137,11 @@ export class BusinessesController {
   async submit(@CurrentAuthContext() ctx: AuthorizationContext, @Param('id') id: string) {
     const brokerProfileId = this.requireBroker(ctx);
     try {
-      await repo.submitBusiness(ctx, brokerProfileId, id);
+      const { notificationId, recipientEmail, shouldSend, subject, body } = await repo.submitBusiness(ctx, brokerProfileId, id);
+      if (shouldSend) {
+        await this.email.send(recipientEmail, subject, body);
+        await markSent(notificationId);
+      }
     } catch (err) {
       throw this.mapError(err);
     }

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
@@ -15,6 +16,9 @@ import {
 import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard';
 import { CurrentAuthContext } from '../identity/decorators/current-auth-context.decorator';
 import { AuthorizationContext } from '../../db/authorization-context';
+import { EMAIL_SENDER } from '../notifications/notifications.module';
+import { EmailSender } from '../notifications/email-sender';
+import { markSent } from '../notifications/notification.repository';
 import * as repo from './brokers.repository';
 import { UpdateBrokerProfileDto } from './dto/update-broker-profile.dto';
 import { CreateAssociationMembershipDto } from './dto/create-association-membership.dto';
@@ -28,6 +32,8 @@ import { UpdateAssociationMembershipDto } from './dto/update-association-members
 @Controller('brokers/me')
 @UseGuards(JwtAuthGuard)
 export class BrokersController {
+  constructor(@Inject(EMAIL_SENDER) private readonly email: EmailSender) {}
+
   private requireBroker(ctx: AuthorizationContext): string {
     if (ctx.actorType !== 'broker') throw new UnauthorizedException();
     return ctx.actorId;
@@ -69,7 +75,11 @@ export class BrokersController {
   async submit(@CurrentAuthContext() ctx: AuthorizationContext) {
     const brokerProfileId = this.requireBroker(ctx);
     try {
-      await repo.submitProfile(ctx, brokerProfileId);
+      const { notificationId, recipientEmail, shouldSend, subject, body } = await repo.submitProfile(ctx, brokerProfileId);
+      if (shouldSend) {
+        await this.email.send(recipientEmail, subject, body);
+        await markSent(notificationId);
+      }
     } catch (err) {
       throw this.mapProfileError(err);
     }

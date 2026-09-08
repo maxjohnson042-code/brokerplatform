@@ -1,5 +1,7 @@
 import { withAuthorizationContext, AuthorizationContext } from '../../db/authorization-context';
 import { recordAuditEvent } from '../audit/audit.repository';
+import { createNotification } from '../notifications/notification.repository';
+import { accreditationActivatedTemplate } from '../notifications/notification-templates';
 import { getAccreditationOrThrow, assertClientUserOrSystem, actorIdOf, InvalidAccreditationTransitionError } from './accreditation.repository';
 
 export type TrainingKind = 'platform' | 'product';
@@ -55,7 +57,10 @@ export async function confirmTraining(
  * judgement (per the Epic 11 plan's Scope decision), so the platform doesn't count
  * confirmations before allowing this.
  */
-export async function activateAccreditation(ctx: AuthorizationContext, accreditationId: string): Promise<void> {
+export async function activateAccreditation(
+  ctx: AuthorizationContext,
+  accreditationId: string,
+): Promise<{ notificationId: string; recipientEmail: string; shouldSend: boolean; subject: string; body: string }> {
   assertClientUserOrSystem(ctx);
   return withAuthorizationContext(ctx, async (client) => {
     const accreditation = await getAccreditationOrThrow(client, accreditationId);
@@ -72,6 +77,24 @@ export async function activateAccreditation(ctx: AuthorizationContext, accredita
       subjectId: accreditationId,
       clientOrganisationId: accreditation.lender_client_organisation_id,
     });
+
+    // NOT-003: a summary notification, not a document pack — see the Epic 12 plan's
+    // Scope decision (no commission-schedule/code-of-conduct content system exists).
+    const { rows: orgRows } = await client.query(`SELECT name FROM client_organisations WHERE id = $1`, [accreditation.lender_client_organisation_id]);
+    const { subject, body } = accreditationActivatedTemplate({
+      organisationName: orgRows[0]?.name ?? 'your lender',
+      lenderIssuedId: accreditation.lender_issued_id,
+    });
+    const notification = await createNotification(client, ctx, {
+      recipientType: 'broker',
+      recipientId: accreditation.broker_profile_id,
+      category: 'accreditation_activated',
+      subject,
+      body,
+      relatedRecordType: 'accreditation',
+      relatedRecordId: accreditationId,
+    });
+    return { notificationId: notification.id, recipientEmail: notification.recipientEmail, shouldSend: notification.shouldSend, subject, body };
   });
 }
 

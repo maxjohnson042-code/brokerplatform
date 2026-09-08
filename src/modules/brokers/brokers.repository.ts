@@ -1,6 +1,8 @@
 import type { PoolClient } from 'pg';
 import { withAuthorizationContext, AuthorizationContext } from '../../db/authorization-context';
 import { recordAuditEvent } from '../audit/audit.repository';
+import { createNotification } from '../notifications/notification.repository';
+import { profileSubmittedTemplate } from '../notifications/notification-templates';
 
 export class BrokerProfileNotFoundError extends Error {
   constructor(id: string) {
@@ -251,7 +253,10 @@ export async function getOutstandingItems(
  * BrokerProfileIncompleteError (carrying the items) rather than silently no-op'ing so
  * the controller can return exactly what's still missing.
  */
-export async function submitProfile(ctx: AuthorizationContext, brokerProfileId: string): Promise<void> {
+export async function submitProfile(
+  ctx: AuthorizationContext,
+  brokerProfileId: string,
+): Promise<{ notificationId: string; recipientEmail: string; shouldSend: boolean; subject: string; body: string }> {
   return withAuthorizationContext(ctx, async (client) => {
     const { rows } = await client.query(`SELECT status FROM broker_profiles WHERE id = $1`, [brokerProfileId]);
     if (rows.length === 0) throw new BrokerProfileNotFoundError(brokerProfileId);
@@ -271,6 +276,20 @@ export async function submitProfile(ctx: AuthorizationContext, brokerProfileId: 
       subjectType: 'broker_profile',
       subjectId: brokerProfileId,
     });
+
+    // NOT-001: "brokers notified on submission" — logged atomically with the status
+    // change above (same transaction), same fix as every other Epic 12 call site.
+    const { subject, body } = profileSubmittedTemplate();
+    const notification = await createNotification(client, ctx, {
+      recipientType: 'broker',
+      recipientId: brokerProfileId,
+      category: 'profile_submitted',
+      subject,
+      body,
+      relatedRecordType: 'broker_profile',
+      relatedRecordId: brokerProfileId,
+    });
+    return { notificationId: notification.id, recipientEmail: notification.recipientEmail, shouldSend: notification.shouldSend, subject, body };
   });
 }
 
