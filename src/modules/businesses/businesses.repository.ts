@@ -535,7 +535,7 @@ export async function listMyAffiliations(
   return withAuthorizationContext(ctx, async (client) => {
     const { rows } = await client.query(
       `SELECT ba.id, ba.broker_business_id, ba.role, ba.status, ba.started_at, ba.ended_at, ba.end_reason,
-              bb.legal_name, bb.trading_name, bb.entity_type
+              bb.legal_name, bb.trading_name, bb.entity_type, bb.status AS business_status
        FROM business_affiliations ba
        LEFT JOIN broker_businesses bb ON bb.id = ba.broker_business_id
        WHERE ba.broker_profile_id = $1

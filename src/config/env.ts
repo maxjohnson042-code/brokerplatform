@@ -20,6 +20,26 @@ export const env = {
     appToken: process.env.SUMSUB_APP_TOKEN ?? '',
     secretKey: process.env.SUMSUB_SECRET_KEY ?? '',
     baseUrl: process.env.SUMSUB_BASE_URL ?? 'https://api.sumsub.com',
+    // Levels are configured per-account in Sumsub's own dashboard, not a fixed string
+    // — this default is almost certainly wrong for any real account and exists only
+    // so the adapter has something to call before it's set. Same reasoning for the
+    // webhook secret: Sumsub lets you configure a separate secret per webhook
+    // subscription, which may or may not be the same as SUMSUB_SECRET_KEY above.
+    kycLevelName: process.env.SUMSUB_KYC_LEVEL_NAME ?? 'basic-kyc-level',
+    // `||` not `??`: an .env file that declares the key but leaves it blank (as
+    // .env.example documents) sets process.env to '', which `??` would NOT fall
+    // through on (it only treats null/undefined as absent) — silently defeating the
+    // documented "leave blank to reuse SUMSUB_SECRET_KEY" behaviour.
+    webhookSecret: process.env.SUMSUB_WEBHOOK_SECRET || process.env.SUMSUB_SECRET_KEY || '',
+    // Sumsub lets the account owner pick the digest algorithm per webhook
+    // subscription in their dashboard — this must match whatever's actually
+    // configured there, not guessed.
+    webhookDigestAlg: process.env.SUMSUB_WEBHOOK_DIGEST_ALG ?? 'sha256',
+    // The standard hosted-verification-link format at time of writing — confirm this
+    // against the current Sumsub docs/dashboard for this account before relying on it;
+    // Sumsub's API surface is versioned and this is the one piece of this adapter not
+    // copied from an existing working reference in this codebase.
+    hostedLinkBaseUrl: process.env.SUMSUB_HOSTED_LINK_BASE_URL ?? 'https://in.sumsub.com/websdk/p',
   },
   auth: {
     // Dev-only fallback, same pattern as appDatabaseUrl above — replace from a real

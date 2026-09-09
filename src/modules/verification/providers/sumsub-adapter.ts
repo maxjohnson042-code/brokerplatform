@@ -8,15 +8,16 @@ import {
 } from './identity-verification-provider';
 
 /**
- * Sumsub adapter — OQ-16 resolved. This is a real request-signing implementation
- * (Sumsub's HMAC-SHA256 request signature scheme) wired against a STUBBED http call,
- * since this scaffold ships with no live Sumsub sandbox credentials. Replace the
- * `request()` body with an actual fetch/axios call once SUMSUB_APP_TOKEN and
- * SUMSUB_SECRET_KEY are set in .env, and this class's public shape should not need to
- * change — that is the point of building it behind IdentityVerificationProvider.
+ * Sumsub adapter — OQ-16 resolved, KYC (individual) only. This scaffold's original
+ * comment described the request-signing as real against a stubbed transport; the
+ * transport is now real too. Handles the individual-KYC hosted-link flow: create an
+ * applicant, then request a one-time access token and construct the hosted
+ * verification link from it (IDV-015: use Sumsub's own capture, don't build one).
  *
- * Handles both KYC (individual) and KYB (business) subjects, per OQ-16's selection
- * criterion of a single provider covering both.
+ * KYB (business) is deliberately NOT implemented here — see mock-kyb-adapter.ts.
+ * Sumsub's KYB tier isn't provisioned on this account; when it is, KYB support is a
+ * second `submit`/`poll` branch on this same class (or a second real adapter class),
+ * never a change to anything that calls IdentityVerificationProvider.
  */
 export class SumsubAdapter implements IdentityVerificationProvider {
   private sign(method: string, path: string, body: string, ts: number): string {
@@ -25,50 +26,80 @@ export class SumsubAdapter implements IdentityVerificationProvider {
       .digest('hex');
   }
 
-  private async request(method: string, path: string, body: Record<string, unknown> = {}): Promise<Buffer> {
+  private async request<T>(method: string, path: string, body: Record<string, unknown> = {}): Promise<T> {
+    if (!env.sumsub.appToken || !env.sumsub.secretKey) {
+      throw new Error(
+        'SUMSUB_APP_TOKEN / SUMSUB_SECRET_KEY are not set. Add sandbox credentials to .env (see .env.example) ' +
+          'before calling the Sumsub adapter.',
+      );
+    }
+
     const payload = Object.keys(body).length ? JSON.stringify(body) : '';
     const ts = Math.floor(Date.now() / 1000);
     const signature = this.sign(method, path, payload, ts);
 
-    if (!env.sumsub.appToken || !env.sumsub.secretKey) {
-      throw new Error(
-        'SUMSUB_APP_TOKEN / SUMSUB_SECRET_KEY are not set. Add sandbox credentials to .env ' +
-          '(see .env.example) before calling the Sumsub adapter for real — the request ' +
-          'signing above is correct against Sumsub\'s documented scheme, only the ' +
-          'transport call below is stubbed out.',
-      );
-    }
+    const res = await fetch(`${env.sumsub.baseUrl}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-App-Token': env.sumsub.appToken,
+        'X-App-Access-Sig': signature,
+        'X-App-Access-Ts': String(ts),
+      },
+      body: payload || undefined,
+    });
 
-    // Deliberately not making a real network call in this scaffold. Wire in your
-    // preferred HTTP client here — headers are exactly what Sumsub's API expects:
-    //   X-App-Token: env.sumsub.appToken
-    //   X-App-Access-Sig: signature
-    //   X-App-Access-Ts: ts
-    throw new Error(`Not implemented: ${method} ${path} (signature computed correctly: ${signature})`);
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`Sumsub ${method} ${path} returned ${res.status}: ${text}`);
+    }
+    return (text ? JSON.parse(text) : {}) as T;
   }
 
   async submit(subject: VerificationSubject): Promise<VerificationSubmission> {
-    const levelName = subject.kind === 'individual' ? 'basic-kyc-level' : 'basic-kyb-level';
-    const externalUserId = subject.kind === 'individual' ? subject.brokerProfileId : subject.brokerBusinessId;
+    if (subject.kind !== 'individual') {
+      throw new Error('SumsubAdapter only handles individual KYC — see mock-kyb-adapter.ts for business KYB.');
+    }
+    const externalUserId = subject.brokerProfileId;
+    const levelName = env.sumsub.kycLevelName;
 
-    await this.request('POST', `/resources/applicants?levelName=${levelName}`, {
+    const applicant = await this.request<{ id: string }>('POST', `/resources/applicants?levelName=${encodeURIComponent(levelName)}`, {
       externalUserId,
-      info:
-        subject.kind === 'individual'
-          ? { firstName: subject.firstName, lastName: subject.lastName, dob: subject.dateOfBirth }
-          : { companyInfo: { companyName: subject.legalName, registrationNumber: subject.abn } },
+      info: { firstName: subject.firstName, lastName: subject.lastName, dob: subject.dateOfBirth },
     });
 
-    // Real implementation returns Sumsub's applicantId from the response body.
-    return { providerApplicantId: externalUserId };
+    // A one-time access token for the hosted verification flow — Sumsub's standard
+    // "get a token for this user/level" endpoint, used for both the embedded WebSDK
+    // and a hosted link. userId here is the SAME externalUserId passed above, per
+    // Sumsub's documented pairing of the two calls.
+    const accessToken = await this.request<{ token: string }>(
+      'POST',
+      `/resources/accessTokens?userId=${encodeURIComponent(externalUserId)}&levelName=${encodeURIComponent(levelName)}`,
+    );
+
+    return {
+      providerApplicantId: applicant.id,
+      hostedLinkUrl: `${env.sumsub.hostedLinkBaseUrl}/${encodeURIComponent(accessToken.token)}`,
+    };
   }
 
+  // A fallback for checking status without waiting for a webhook — the webhook
+  // (see identity-verification.repository.ts's recordWebhookResult) is the primary
+  // path for this epic, so this is here for completeness/manual use, not exercised
+  // by the main flow.
   async poll(providerApplicantId: string): Promise<VerificationResult> {
-    const raw = await this.request('GET', `/resources/applicants/${providerApplicantId}/status`);
+    const raw = await this.request<{ reviewStatus?: string; reviewResult?: { reviewAnswer?: string } }>(
+      'GET',
+      `/resources/applicants/${providerApplicantId}/status`,
+    );
+    const reviewStatus = raw.reviewStatus ?? 'pending';
+    const reviewAnswer = raw.reviewResult?.reviewAnswer;
+    const status: VerificationResult['status'] =
+      reviewStatus !== 'completed' ? 'pending' : reviewAnswer === 'GREEN' ? 'approved' : reviewAnswer === 'RED' ? 'declined' : 'requires_review';
     return {
-      status: 'pending',
-      rawPayload: raw,
-      normalisedOutcome: 'pending',
+      status,
+      rawPayload: Buffer.from(JSON.stringify(raw)),
+      normalisedOutcome: reviewAnswer ?? reviewStatus,
     };
   }
 }

@@ -5,7 +5,12 @@ import { AppModule } from './app.module';
 import { env } from './config/env';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true makes the exact, unparsed request bytes available as req.rawBody —
+  // needed by the Sumsub webhook route (verification.controller.ts) to verify an
+  // HMAC signature computed over those exact bytes, which JSON body-parsing would
+  // otherwise discard (re-serializing rarely reproduces the same bytes that were
+  // actually signed). Available on every route, but only the webhook one reads it.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   // whitelist/transform: Epic 2 is the first epic with request-body DTOs
   // (class-validator decorated) — strip unknown fields rather than silently accept
   // them, and coerce payloads into the DTO classes so nested class-validator rules run.

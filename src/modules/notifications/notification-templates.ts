@@ -12,7 +12,10 @@ export type NotificationCategory =
   | 'accreditation_information_required'
   | 'accreditation_approved'
   | 'accreditation_declined'
-  | 'accreditation_activated';
+  | 'accreditation_activated'
+  | 'identity_verification_submitted'
+  | 'identity_verification_complete'
+  | 'identity_verification_queue_entry';
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   'profile_submitted',
@@ -22,6 +25,9 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   'accreditation_approved',
   'accreditation_declined',
   'accreditation_activated',
+  'identity_verification_submitted',
+  'identity_verification_complete',
+  'identity_verification_queue_entry',
 ];
 
 // NOT-005: categories tied to a decision outcome the broker must not miss — cannot be
@@ -31,6 +37,7 @@ export const MANDATORY_NOTIFICATION_CATEGORIES = new Set<NotificationCategory>([
   'accreditation_information_required',
   'accreditation_approved',
   'accreditation_declined',
+  'identity_verification_complete',
 ]);
 
 export type NotificationContent = { subject: string; body: string };
@@ -74,6 +81,30 @@ export function accreditationDeclinedTemplate(params: { rationale: string }): No
   return {
     subject: 'Your accreditation was not approved',
     body: params.rationale,
+  };
+}
+
+// IDV-*: identity/KYC (broker) and business/KYB verification notifications.
+export function identityVerificationSubmittedTemplate(): NotificationContent {
+  return {
+    subject: 'Your identity verification has been submitted',
+    body: 'We\'ll let you know once it\'s been reviewed.',
+  };
+}
+
+export function identityVerificationCompleteTemplate(params: { approved: boolean }): NotificationContent {
+  return params.approved
+    ? { subject: 'Your identity verification is complete', body: 'Your identity has been verified.' }
+    : {
+        subject: 'Your identity verification needs attention',
+        body: 'Your identity verification could not be confirmed as submitted. Please check your profile for details.',
+      };
+}
+
+export function identityVerificationQueueEntryTemplate(params: { subjectName: string; kind: 'individual' | 'business' }): NotificationContent {
+  return {
+    subject: 'An identity verification result is ready for review',
+    body: `${params.subjectName}'s ${params.kind === 'individual' ? 'identity' : 'business'} verification result is ready for your review.`,
   };
 }
 

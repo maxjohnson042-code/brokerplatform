@@ -13,6 +13,7 @@ export type VerificationSubject =
 
 export type VerificationSubmission = {
   providerApplicantId: string; // the provider's own reference — needed to poll/receive callbacks
+  hostedLinkUrl?: string; // where to redirect the subject to actually complete capture, if the provider has one
 };
 
 export type VerificationResult = {
