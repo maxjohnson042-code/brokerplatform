@@ -3,30 +3,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const DESTINATIONS = [
   {
+    href: "/accreditations",
+    title: "My accreditations",
+    description: "Request accreditation with a lender and track it through review, training and activation.",
+  },
+  {
+    href: "/client/queue",
+    title: "Review queue",
+    description: "The lender review workbench: dense, filterable, evidence-first.",
+  },
+  {
     href: "/design-system",
     title: "Design system",
-    description: "Every colour token and status mapping in one reference page — start here.",
-  },
-  {
-    href: "/register",
-    title: "Broker registration",
-    description: "The broker-facing onboarding form (ONB-001–012): easy, forgiving, draft-friendly.",
-  },
-  {
-    href: "/reviewer/queue",
-    title: "Reviewer queue",
-    description: "The lender review workbench (REV-001/002): dense, filterable, evidence-first.",
+    description: "Every colour token and status mapping in one reference page.",
   },
 ] as const;
 
 export default function Home() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Thriski frontend foundations</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome to Thriski</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-        This scaffold proves the design system and two representative screens end to end. It reads from
-        typed mock data (see <code className="rounded bg-muted px-1 py-0.5 text-xs">src/lib/api-client.ts</code>)
-        until Epic 2&apos;s HTTP API exists to replace it.
+        Broker onboarding, accreditation and ongoing monitoring, in one place. Pick up where you left off,
+        or jump into one of the screens below.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">

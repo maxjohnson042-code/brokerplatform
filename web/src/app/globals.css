@@ -19,30 +19,35 @@
  */
 
 :root {
-  --background: #ffffff;
+  /* A soft neutral canvas, not pure white — cards (--card, pure white) then sit a
+     shade lighter than the page behind them, which is what gives a dashboard like
+     Linear/Stripe/Vercel its sense of depth without relying on heavy borders. */
+  --background: #f8fafc;
   --foreground: #0f172a;
 
   --card: #ffffff;
   --card-foreground: #0f172a;
 
-  --primary: #14324f;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
   --primary-foreground: #ffffff;
 
-  --secondary: #eef2f6;
-  --secondary-foreground: #14324f;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #334155;
 
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
 
-  --accent: #eef2f6;
-  --accent-foreground: #14324f;
+  --accent: #eef2ff;
+  --accent-foreground: #4338ca;
 
   --destructive: #dc2626;
+  --destructive-hover: #b91c1c;
   --destructive-foreground: #ffffff;
 
-  --border: #e2e8f0;
+  --border: #e5e7eb;
   --input: #e2e8f0;
-  --ring: #2563eb;
+  --ring: #4f46e5;
 
   /* Semantic status pairs — soft background + a text colour that passes WCAG AA
      against it. "success" reads as current/verified/active; "warning" as needing
@@ -63,30 +68,35 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0b1220;
+    --background: #0a0e1a;
     --foreground: #e2e8f0;
 
-    --card: #111827;
+    /* Lighter than --background, same "card floats above the canvas" logic as light
+       mode — the two themes should feel like the same product, not two different
+       skins glued together. */
+    --card: #131a2b;
     --card-foreground: #e2e8f0;
 
-    --primary: #6ea3cd;
-    --primary-foreground: #0b1220;
+    --primary: #818cf8;
+    --primary-hover: #a5b4fc;
+    --primary-foreground: #0a0e1a;
 
-    --secondary: #1e293b;
+    --secondary: #1a2333;
     --secondary-foreground: #e2e8f0;
 
-    --muted: #1e293b;
+    --muted: #1a2333;
     --muted-foreground: #94a3b8;
 
-    --accent: #1e293b;
-    --accent-foreground: #e2e8f0;
+    --accent: #1e2540;
+    --accent-foreground: #c7d2fe;
 
     --destructive: #f87171;
+    --destructive-hover: #fca5a5;
     --destructive-foreground: #1f2937;
 
-    --border: #1e293b;
-    --input: #1e293b;
-    --ring: #6ea3cd;
+    --border: #232c40;
+    --input: #232c40;
+    --ring: #818cf8;
 
     --status-success-bg: #0f2c1c;
     --status-success-fg: #86efac;
@@ -107,6 +117,7 @@
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -115,6 +126,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
