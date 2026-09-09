@@ -232,7 +232,7 @@ export function verifyClientMfa(pendingToken: string, code: string): Promise<Tok
 
 // ---- relationships (REL-001-007/010, src/modules/relationships) ----
 
-export type RelationshipType = "lender_panel" | "aggregator" | "association_membership";
+export type RelationshipType = "lender_panel" | "aggregator_membership" | "association_membership";
 export type RelationshipStatus = "requested" | "pending_acceptance" | "active" | "declined" | "revoked" | "ended";
 
 export type MyRelationship = {
@@ -351,7 +351,7 @@ export type AccreditationFullContext = {
   accreditation: Accreditation;
   profile: Record<string, unknown> | null;
   business: Record<string, unknown> | null;
-  evidence: Array<{ document_type: string | null; expiry_date: string | null }>;
+  evidence: Array<{ id: string; document_type: string | null; expiry_date: string | null; original_filename: string | null }>;
   checkResults: Array<{ check_type: string; outcome: string }>;
   decisions: AccreditationDecision[];
 };
@@ -487,6 +487,61 @@ export const MANDATORY_NOTIFICATION_CATEGORIES = new Set([
   "accreditation_approved",
   "accreditation_declined",
 ]);
+
+// ---- Epic 13: broker profile self-service + audit surfacing ----
+
+export type OutstandingSummaryItem = {
+  source: "profile" | "business" | "accreditation";
+  sourceId: string;
+  sourceLabel: string;
+  groupId: string;
+  label: string;
+  reason: string;
+};
+export function getOutstandingSummary(token: string): Promise<OutstandingSummaryItem[]> {
+  return apiFetch("/brokers/me/outstanding-summary", { token });
+}
+
+export type AccessHistoryEntry = {
+  occurred_at: string;
+  organisation_name: string | null;
+  document_type: string | null;
+  original_filename: string | null;
+};
+export function listMyAccessHistory(token: string): Promise<AccessHistoryEntry[]> {
+  return apiFetch("/brokers/me/access-history", { token });
+}
+
+export type Reconstruction = {
+  asOf: string;
+  accreditations: Array<{ id: string; brand: string; role: string; classification: string; status: string }>;
+  checkResults: Array<Record<string, unknown>>;
+  documents: Array<Record<string, unknown>>;
+};
+export function getReconstruction(token: string, asOf: string): Promise<Reconstruction> {
+  return apiFetch(`/brokers/me/reconstruction?asOf=${encodeURIComponent(asOf)}`, { token });
+}
+
+/**
+ * The first authenticated file download in this app — a plain <a href> can't carry
+ * the Bearer token, so this fetches the blob with the header set, then triggers a
+ * save via a synthetic anchor click. Also what makes AUD-007's access logging
+ * (evidence.repository.ts's getDocumentForDownload) actually fire in practice —
+ * before this there was no UI path that ever hit the download endpoint at all.
+ */
+export async function downloadDocument(token: string, evidenceId: string, filename: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/documents/${evidenceId}/download`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ---- token storage ----
 // localStorage, deliberately simple — a real app would use httpOnly cookies + a

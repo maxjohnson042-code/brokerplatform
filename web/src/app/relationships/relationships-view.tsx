@@ -18,8 +18,17 @@ import {
 
 const TYPE_LABELS: Record<string, string> = {
   lender_panel: "Lender panel",
-  aggregator: "Aggregator",
+  aggregator_membership: "Aggregator",
   association_membership: "Association membership",
+};
+
+// PRF-005: "who is my data shared with, and what can they see" — shared_data_scope
+// itself (SHARED_DATA_SCOPE in relationships.repository.ts) is server-side only, so
+// these descriptions are the frontend's own plain-English gloss on each value.
+const SCOPE_DESCRIPTIONS: Record<string, string> = {
+  lender_full: "Full profile, licensing, documents and accreditation history.",
+  aggregator_full: "Full profile, licensing, documents and accreditation history, as your aggregator.",
+  association_membership_only: "Membership status only — not your profile, documents or accreditation history.",
 };
 
 export function RelationshipsView() {
@@ -133,6 +142,10 @@ export function RelationshipsView() {
                   <StatusBadge domain="relationship" value={r.status} />
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">What they can see: </span>
+                    {SCOPE_DESCRIPTIONS[r.shared_data_scope] ?? r.shared_data_scope}
+                  </p>
                   {r.status === "pending_acceptance" && (
                     <div className="flex items-center gap-3">
                       <Button

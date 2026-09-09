@@ -21,7 +21,7 @@ import {
 
 const TYPES: { value: RelationshipType; label: string }[] = [
   { value: "lender_panel", label: "Lender panel" },
-  { value: "aggregator", label: "Aggregator" },
+  { value: "aggregator_membership", label: "Aggregator" },
   { value: "association_membership", label: "Association membership" },
 ];
 

@@ -21,9 +21,13 @@ import {
   listAssociationMemberships,
   addAssociationMembership,
   removeAssociationMembership,
+  listMyAccessHistory,
+  getReconstruction,
   type BrokerProfile,
   type OutstandingItem,
   type AssociationMembership,
+  type AccessHistoryEntry,
+  type Reconstruction,
 } from "@/lib/thriski-api";
 
 const GENDERS = ["male", "female", "other"];
@@ -125,20 +129,26 @@ export function ProfileView() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [newAssociation, setNewAssociation] = useState({ associationName: ASSOCIATIONS[0], membershipNumber: "" });
+  const [accessHistory, setAccessHistory] = useState<AccessHistoryEntry[]>([]);
+  const [asOfDate, setAsOfDate] = useState("");
+  const [reconstruction, setReconstruction] = useState<Reconstruction | null>(null);
+  const [reconstructionError, setReconstructionError] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, formState } = useForm<FormValues>();
 
   const editable = profile?.status === "draft" || profile?.status === "attention_required";
 
   const refresh = useCallback(async (activeToken: string) => {
-    const [freshProfile, items, associations] = await Promise.all([
+    const [freshProfile, items, associations, history] = await Promise.all([
       getMyProfile(activeToken),
       getOutstandingItems(activeToken),
       listAssociationMemberships(activeToken),
+      listMyAccessHistory(activeToken),
     ]);
     setProfile(freshProfile);
     setOutstanding(items);
     setMemberships(associations);
+    setAccessHistory(history);
     reset(profileToFormValues(freshProfile));
   }, [reset]);
 
@@ -212,6 +222,17 @@ export function ProfileView() {
   function onLogout() {
     clearToken();
     router.replace("/login");
+  }
+
+  async function onReconstruct() {
+    if (!token || !asOfDate) return;
+    setReconstructionError(null);
+    try {
+      setReconstruction(await getReconstruction(token, asOfDate));
+    } catch (err) {
+      setReconstruction(null);
+      setReconstructionError(err instanceof ApiError ? err.message : "Could not reconstruct that date.");
+    }
   }
 
   if (loadError) {
@@ -480,6 +501,71 @@ export function ProfileView() {
                 <Button type="button" className="w-full" disabled={outstanding.length > 0} onClick={onSubmitProfile}>
                   Submit
                 </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Access history</CardTitle>
+              <CardDescription>AUD-003/007 — which organisations viewed your documents, and when.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {accessHistory.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No documents have been viewed yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {accessHistory.map((entry, i) => (
+                    <li key={i} className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">{entry.organisation_name ?? "Unknown organisation"}</span>{" "}
+                      viewed {entry.document_type ?? "a document"} on {new Date(entry.occurred_at).toLocaleString()}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>View as of a date</CardTitle>
+              <CardDescription>AUD-005 — reconstruct your verified state as at any past date.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-end gap-2">
+                <Field label="Date" htmlFor="asOfDate" className="flex-1">
+                  <Input id="asOfDate" type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
+                </Field>
+                <Button type="button" size="sm" disabled={!asOfDate} onClick={onReconstruct}>
+                  View
+                </Button>
+              </div>
+              {reconstructionError && <p className="text-xs text-destructive">{reconstructionError}</p>}
+              {reconstruction && (
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">Accreditations</p>
+                    {reconstruction.accreditations.length === 0 ? (
+                      <p className="text-muted-foreground">None existed yet.</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {reconstruction.accreditations.map((a) => (
+                          <li key={a.id}>
+                            {a.brand} — {a.role}: <span className="font-medium text-foreground">{a.status}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">Checks current then</p>
+                    <p className="text-muted-foreground">{reconstruction.checkResults.length} check result(s).</p>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">Documents valid then</p>
+                    <p className="text-muted-foreground">{reconstruction.documents.length} document(s).</p>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

@@ -19,6 +19,7 @@ import {
   declineAccreditation,
   confirmTraining,
   activateAccreditation,
+  downloadDocument,
   type AccreditationFullContext,
   type OutstandingItemsResult,
   type TrainingConfirmation,
@@ -169,8 +170,17 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
               <p className="text-sm text-muted-foreground">None uploaded.</p>
             ) : (
               <ul className="text-sm text-foreground">
-                {evidence.map((e, i) => (
-                  <li key={i}>{e.document_type ?? "unknown"}</li>
+                {evidence.map((e) => (
+                  <li key={e.id} className="flex items-center justify-between gap-2">
+                    <span>{e.document_type ?? "unknown"}</span>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                      onClick={() => token && downloadDocument(token, e.id, e.original_filename ?? `${e.document_type ?? "document"}`)}
+                    >
+                      Download
+                    </button>
+                  </li>
                 ))}
               </ul>
             )}
