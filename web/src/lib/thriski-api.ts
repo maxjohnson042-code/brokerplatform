@@ -11,6 +11,18 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
 
+// Decoded client-side for UI convenience only (e.g. knowing which org id to pass to
+// /accreditations/queue) — never trusted for authorization, the backend re-validates
+// the real token's signature on every request regardless.
+export function getClientOrganisationIdFromToken(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1])) as { clientOrganisationId?: string };
+    return payload.clientOrganisationId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -184,6 +196,20 @@ export function createBusiness(token: string, input: CreateBusinessInput): Promi
   return apiFetch("/businesses", { method: "POST", token, body: JSON.stringify(input) });
 }
 
+export type MyAffiliation = {
+  id: string;
+  broker_business_id: string;
+  role: string;
+  status: string;
+  legal_name: string | null;
+  trading_name: string | null;
+  entity_type: string | null;
+};
+
+export function listMyAffiliations(token: string): Promise<MyAffiliation[]> {
+  return apiFetch("/businesses/me/affiliations", { token });
+}
+
 // ---- client_user auth (AUTH-002/006 — MFA is mandatory, never optional) ----
 
 export type MfaLoginPending = { pendingToken: string; tokenType: "mfa_pending" | "mfa_enrolment_pending" };
@@ -271,6 +297,196 @@ export function inviteBroker(token: string, brokerEmail: string, type: Relations
 export function endRelationship(token: string, id: string, reason: string): Promise<{ ok: true }> {
   return apiFetch(`/relationships/${id}/end`, { method: "POST", token, body: JSON.stringify({ reason }) });
 }
+
+// ---- accreditation (ACR-*/REV-*, src/modules/accreditation) ----
+
+export type AccreditationClassification = "new_broker_introducer" | "new_referrer_introducer" | "transfer" | "add_on";
+export type AccreditationStatus =
+  | "requested"
+  | "information_required"
+  | "exception_escalated"
+  | "declined"
+  | "pending"
+  | "party_changed_pending"
+  | "active"
+  | "lapsed";
+export type LicenceHolderType = "aggregator_organisation" | "broking_business" | "third_party";
+
+export type Accreditation = {
+  id: string;
+  lender_client_organisation_id: string;
+  broker_profile_id: string;
+  broker_business_id: string;
+  classification: AccreditationClassification;
+  brand: string;
+  role: string;
+  product_scope: string;
+  pathway: string;
+  ruleset_version_id: string | null;
+  licence_holder_type: LicenceHolderType;
+  lender_issued_id: string | null;
+  status: AccreditationStatus;
+  current_decision_step: "reviewer" | "senior_approver";
+  interview_recommendation: string | null;
+  party_changed_at: string | null;
+  training_deadline_at: string | null;
+  activated_at: string | null;
+  requested_at: string;
+  decided_at: string | null;
+  created_at: string;
+};
+
+export type AccreditationDecision = {
+  id: string;
+  accreditation_id: string;
+  actor_type: string;
+  actor_id: string | null;
+  decision_type: "information_requested" | "escalated" | "approved" | "declined" | "interview_recorded";
+  rationale: string | null;
+  itemised_reasons: string[] | null;
+  created_at: string;
+};
+
+export type AccreditationFullContext = {
+  accreditation: Accreditation;
+  profile: Record<string, unknown> | null;
+  business: Record<string, unknown> | null;
+  evidence: Array<{ document_type: string | null; expiry_date: string | null }>;
+  checkResults: Array<{ check_type: string; outcome: string }>;
+  decisions: AccreditationDecision[];
+};
+
+export type OutstandingRequirement = { groupId: string; label: string; reason: string };
+export type OutstandingItemsResult = { rulesetConfigured: true; items: OutstandingRequirement[] } | { rulesetConfigured: false };
+
+export type RequestAccreditationInput = {
+  lenderClientOrganisationId: string;
+  brokerBusinessId: string;
+  classification: AccreditationClassification;
+  brand: string;
+  role: string;
+  productScope: string;
+  licenceHolderType: LicenceHolderType;
+  licenceHolderClientOrganisationId?: string;
+  licenceHolderBrokerBusinessId?: string;
+  licenceHolderName?: string;
+  isCorporateCreditRepresentative?: boolean;
+};
+
+export function requestAccreditation(token: string, input: RequestAccreditationInput): Promise<{ id: string }> {
+  return apiFetch("/accreditations", { method: "POST", token, body: JSON.stringify(input) });
+}
+
+export function listMyAccreditations(token: string): Promise<Accreditation[]> {
+  return apiFetch("/accreditations/me", { token });
+}
+
+export function listAccreditationQueue(
+  token: string,
+  lenderClientOrganisationId: string,
+  filters: { status?: AccreditationStatus; classification?: AccreditationClassification; productScope?: string } = {},
+): Promise<Accreditation[]> {
+  const params = new URLSearchParams({ lenderClientOrganisationId, ...filters } as Record<string, string>);
+  return apiFetch(`/accreditations/queue?${params.toString()}`, { token });
+}
+
+export function getAccreditation(token: string, id: string): Promise<AccreditationFullContext> {
+  return apiFetch(`/accreditations/${id}`, { token });
+}
+
+export function getAccreditationOutstandingItems(token: string, id: string): Promise<OutstandingItemsResult> {
+  return apiFetch(`/accreditations/${id}/outstanding-items`, { token });
+}
+
+export function requestAccreditationInformation(token: string, id: string, itemisedReasons: string[]): Promise<{ ok: true }> {
+  return apiFetch(`/accreditations/${id}/request-information`, { method: "POST", token, body: JSON.stringify({ itemisedReasons }) });
+}
+
+export function escalateAccreditation(token: string, id: string, rationale?: string): Promise<{ ok: true }> {
+  return apiFetch(`/accreditations/${id}/escalate`, { method: "POST", token, body: JSON.stringify({ rationale }) });
+}
+
+export function approveAccreditation(token: string, id: string, rationale?: string): Promise<{ ok: true }> {
+  return apiFetch(`/accreditations/${id}/approve`, { method: "POST", token, body: JSON.stringify({ rationale }) });
+}
+
+export function declineAccreditation(token: string, id: string, rationale: string): Promise<{ ok: true }> {
+  return apiFetch(`/accreditations/${id}/decline`, { method: "POST", token, body: JSON.stringify({ rationale }) });
+}
+
+export function recordInterview(token: string, id: string, recommendation: string, notes?: string): Promise<{ ok: true }> {
+  return apiFetch(`/accreditations/${id}/interview`, { method: "POST", token, body: JSON.stringify({ recommendation, notes }) });
+}
+
+export function checkAccreditationLapse(token: string, lenderClientOrganisationId: string): Promise<{ lapsedIds: string[] }> {
+  const params = new URLSearchParams({ lenderClientOrganisationId });
+  return apiFetch(`/accreditations/check-lapse?${params.toString()}`, { method: "POST", token });
+}
+
+// ---- training (TRN-*, confirmation not delivery — src/modules/accreditation/training.repository.ts) ----
+
+export type TrainingKind = "platform" | "product";
+export type TrainingConfirmation = {
+  id: string;
+  accreditation_id: string;
+  kind: TrainingKind;
+  confirmed_at: string;
+  notes: string | null;
+};
+
+export function listTrainingConfirmations(token: string, accreditationId: string): Promise<TrainingConfirmation[]> {
+  return apiFetch(`/accreditations/${accreditationId}/training-confirmations`, { token });
+}
+
+export function confirmTraining(token: string, accreditationId: string, kind: TrainingKind, notes?: string): Promise<{ ok: true }> {
+  return apiFetch(`/accreditations/${accreditationId}/confirm-training`, { method: "POST", token, body: JSON.stringify({ kind, notes }) });
+}
+
+export function activateAccreditation(token: string, accreditationId: string): Promise<{ ok: true }> {
+  return apiFetch(`/accreditations/${accreditationId}/activate`, { method: "POST", token });
+}
+
+// ---- notifications (NOT-*, src/modules/notifications) ----
+
+export type Notification = {
+  id: string;
+  recipient_type: "broker" | "client_user";
+  category: string;
+  subject: string;
+  body: string;
+  suppressed: boolean;
+  sent_at: string | null;
+  created_at: string;
+};
+
+export type NotificationPreference = { category: string; enabled: boolean };
+
+export function listMyNotifications(token: string): Promise<Notification[]> {
+  return apiFetch("/notifications/me", { token });
+}
+
+export function getNotificationPreferences(token: string): Promise<NotificationPreference[]> {
+  return apiFetch("/notification-preferences", { token });
+}
+
+export function setNotificationPreference(token: string, category: string, enabled: boolean): Promise<{ ok: true }> {
+  return apiFetch("/notification-preferences", { method: "PATCH", token, body: JSON.stringify({ category, enabled }) });
+}
+
+export const NOTIFICATION_CATEGORIES = [
+  "profile_submitted",
+  "business_submitted",
+  "accreditation_queue_entry",
+  "accreditation_information_required",
+  "accreditation_approved",
+  "accreditation_declined",
+  "accreditation_activated",
+] as const;
+export const MANDATORY_NOTIFICATION_CATEGORIES = new Set([
+  "accreditation_information_required",
+  "accreditation_approved",
+  "accreditation_declined",
+]);
 
 // ---- token storage ----
 // localStorage, deliberately simple — a real app would use httpOnly cookies + a
