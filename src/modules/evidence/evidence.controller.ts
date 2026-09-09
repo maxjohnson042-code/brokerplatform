@@ -38,7 +38,8 @@ const fileInterceptorOptions = {
 
 // DOC-001/002/006/007/008: document upload, versioning, outstanding-item tracking.
 // Extends the same EvidenceModule Epic 1 scaffolded for the verification pipeline's
-// storeEvidence()/logEvidenceAccess() — this is the first HTTP surface on that table.
+// storeEvidence() — this is the first HTTP surface on that table. download() also
+// carries AUD-007's access logging (see getDocumentForDownload's own comment).
 @Controller('documents')
 @UseGuards(JwtAuthGuard)
 export class EvidenceController {

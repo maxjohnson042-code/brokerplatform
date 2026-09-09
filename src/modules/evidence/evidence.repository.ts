@@ -68,32 +68,6 @@ export async function storeEvidence(
   });
 }
 
-/**
- * IDV-013 / AUD-007: every client access to evidence is logged at record level. Call
- * this from whatever read path serves evidence to a client_user — it does not gate
- * access (RLS already does that), it only records that access happened.
- */
-export async function logEvidenceAccess(
-  evidenceId: string,
-  by: { actorType: 'client_user' | 'broker' | 'platform_admin'; actorId: string; clientOrganisationId?: string },
-): Promise<void> {
-  await withAuthorizationContext(
-    by.actorType === 'client_user'
-      ? { actorType: 'client_user', actorId: by.actorId, clientOrganisationId: by.clientOrganisationId! }
-      : { actorType: by.actorType, actorId: by.actorId },
-    async (client) => {
-      await recordAuditEvent(client, {
-        actorType: by.actorType,
-        actorId: by.actorId,
-        action: 'evidence.viewed',
-        subjectType: 'evidence',
-        subjectId: evidenceId,
-        clientOrganisationId: by.clientOrganisationId,
-      });
-    },
-  );
-}
-
 // ---------------------------------------------------------------------------
 // DOC-001/002/006: broker-uploaded documents. A document is evidence with richer
 // structured metadata (document_type/issue_date/expiry_date/issuing_body/mime_type/
@@ -212,6 +186,14 @@ export async function listCurrentDocuments(
   });
 }
 
+/**
+ * AUD-007: every client access to evidence is logged at record level. Logged inline,
+ * in the same transaction as the read, rather than a second call after the fact —
+ * one logical "view" event, one transaction, no crash-between-read-and-log gap. Only
+ * logged when a client_user is the one downloading — a broker retrieving their own
+ * document isn't cross-org access worth logging (this is what AUD-003's "which
+ * organisations viewed what" is about).
+ */
 export async function getDocumentForDownload(
   ctx: AuthorizationContext,
   evidenceId: string,
@@ -222,6 +204,18 @@ export async function getDocumentForDownload(
       [evidenceId],
     );
     if (rows.length === 0) return null;
+
+    if (ctx.actorType === 'client_user') {
+      await recordAuditEvent(client, {
+        actorType: ctx.actorType,
+        actorId: ctx.actorId,
+        action: 'evidence.viewed',
+        subjectType: 'evidence',
+        subjectId: evidenceId,
+        clientOrganisationId: ctx.clientOrganisationId,
+      });
+    }
+
     const buffer = await defaultStorage.get(rows[0].object_key as string);
     return {
       buffer,

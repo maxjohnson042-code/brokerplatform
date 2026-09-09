@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UnauthorizedException,
   NotFoundException,
   ConflictException,
@@ -23,6 +24,7 @@ import * as repo from './brokers.repository';
 import { UpdateBrokerProfileDto } from './dto/update-broker-profile.dto';
 import { CreateAssociationMembershipDto } from './dto/create-association-membership.dto';
 import { UpdateAssociationMembershipDto } from './dto/update-association-membership.dto';
+import { ReconstructionQueryDto } from './dto/reconstruction-query.dto';
 
 // ONB-*: the broker profile build. Every handler requires actorType === 'broker' and
 // always operates on ctx.actorId — never an id from the request, so a broker can never
@@ -126,6 +128,25 @@ export class BrokersController {
       throw this.mapProfileError(err);
     }
     return { ok: true };
+  }
+
+  // Epic 13 — PRF-003/AUD-003/AUD-005.
+  @Get('outstanding-summary')
+  async outstandingSummary(@CurrentAuthContext() ctx: AuthorizationContext) {
+    const brokerProfileId = this.requireBroker(ctx);
+    return repo.getOutstandingSummary(ctx, brokerProfileId);
+  }
+
+  @Get('access-history')
+  async accessHistory(@CurrentAuthContext() ctx: AuthorizationContext) {
+    const brokerProfileId = this.requireBroker(ctx);
+    return repo.listAccessHistory(ctx, brokerProfileId);
+  }
+
+  @Get('reconstruction')
+  async reconstruction(@CurrentAuthContext() ctx: AuthorizationContext, @Query() query: ReconstructionQueryDto) {
+    const brokerProfileId = this.requireBroker(ctx);
+    return repo.reconstructAsOf(ctx, brokerProfileId, new Date(query.asOf));
   }
 
   private mapProfileError(err: unknown): Error {
