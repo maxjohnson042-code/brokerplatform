@@ -11,6 +11,8 @@
     "demo:tenancy": "ts-node scripts/demo-tenancy.ts",
     "seed:platform-admin": "ts-node scripts/seed-platform-admin.ts",
     "seed:rulesets": "ts-node scripts/seed-rulesets.ts",
+    "seed:demo-data": "ts-node scripts/seed-demo-data.ts",
+    "purge:demo-data": "ts-node scripts/purge-demo-data.ts",
     "start:dev": "ts-node-dev --respawn src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
