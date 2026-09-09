@@ -1,4 +1,4 @@
-# Thriski — context for coding agents
+# brok3r — context for coding agents
 
 This file is what a fresh Claude Code session should read first. It's the compressed
 version of `docs/Thriski - Master Requirements and Architecture Document v2.1.md`

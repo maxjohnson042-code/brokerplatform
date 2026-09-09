@@ -1,4 +1,4 @@
-# Thriski — web
+# brok3r — web
 
 Frontend foundations: Next.js 16 (App Router) + Tailwind v4 + hand-built shadcn-style
 components (Button, Input, Card, Table, etc. — see "Why hand-built, not the shadcn

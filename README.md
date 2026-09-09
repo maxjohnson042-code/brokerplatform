@@ -1,4 +1,4 @@
-# Thriski
+# brok3r
 
 Broker onboarding, accreditation and ongoing-monitoring platform. See `CLAUDE.md` for
 the compressed orientation, and `docs/` for the full requirements/architecture
