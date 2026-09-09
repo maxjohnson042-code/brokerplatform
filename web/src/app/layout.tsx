@@ -11,7 +11,7 @@ import { AppShell } from "@/components/app-shell";
 // local with a licensed font file if the product needs a distinct type identity later
 // — that's a one-file change (globals.css's --font-sans), not a rearchitecture.
 export const metadata: Metadata = {
-  title: "Thriski",
+  title: "brok3r",
   description: "Broker onboarding, accreditation and ongoing monitoring platform",
 };
 

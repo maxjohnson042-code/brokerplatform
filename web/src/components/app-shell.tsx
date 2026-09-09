@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BrandMark } from "./brand-mark";
 import {
   Bell,
   Building2,
@@ -60,11 +61,8 @@ function isActive(pathname: string, href: string): boolean {
 
 function Brand() {
   return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-        T
-      </span>
-      <span className="text-sm font-semibold tracking-tight text-foreground">Thriski</span>
+    <Link href="/" className="flex items-center">
+      <BrandMark className="text-lg" />
     </Link>
   );
 }

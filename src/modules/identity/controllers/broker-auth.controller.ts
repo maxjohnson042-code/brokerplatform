@@ -75,7 +75,7 @@ export class BrokerAuthController {
     if (token) {
       await this.email.send(
         dto.email,
-        'Reset your Thriski password',
+        'Reset your brok3r password',
         `Use this token to reset your password (valid for 1 hour): ${token}`,
       );
     }

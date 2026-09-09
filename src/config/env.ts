@@ -40,7 +40,7 @@ export const env = {
     // unconfigured) or 'resend'. See src/modules/notifications/email-sender.ts.
     provider: process.env.EMAIL_PROVIDER ?? 'console',
     resendApiKey: process.env.RESEND_API_KEY ?? '',
-    fromAddress: process.env.EMAIL_FROM_ADDRESS ?? 'no-reply@thriski.local',
+    fromAddress: process.env.EMAIL_FROM_ADDRESS ?? 'no-reply@brok3r.local',
   },
   // ONB-014/BUS-024 (Section 6.1a, OQ-45): Australia's ABN Lookup web service —
   // free, public, a self-registered GUID rather than a paid/negotiated credential

@@ -22,7 +22,7 @@ const DESTINATIONS = [
 export default function Home() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome to Thriski</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome to brok3r</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
         Broker onboarding, accreditation and ongoing monitoring, in one place. Pick up where you left off,
         or jump into one of the screens below.

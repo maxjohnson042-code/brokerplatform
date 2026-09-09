@@ -143,7 +143,7 @@ export function ClientRelationshipsView() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Invite a broker</CardTitle>
-          <CardDescription>REL-003. They must already have a Thriski broker account.</CardDescription>
+          <CardDescription>REL-003. They must already have a brok3r broker account.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onInvite} className="flex items-end gap-3">

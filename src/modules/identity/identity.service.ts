@@ -112,7 +112,7 @@ export class IdentityService {
     const secret = authenticator.generateSecret();
     const backupCodes = Array.from({ length: 10 }, () => randomBytes(5).toString('hex'));
     await repo.saveMfaEnrollment(clientUserId, secret, backupCodes);
-    const otpauthUri = authenticator.keyuri(clientUserId, 'Thriski', secret);
+    const otpauthUri = authenticator.keyuri(clientUserId, 'brok3r', secret);
     return { otpauthUri, secret, backupCodes };
   }
 
