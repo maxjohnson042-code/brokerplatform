@@ -20,10 +20,15 @@ import {
   confirmTraining,
   activateAccreditation,
   downloadDocument,
+  getVerificationCheckResult,
+  decideVerification,
   type AccreditationFullContext,
   type OutstandingItemsResult,
   type TrainingConfirmation,
+  type VerificationFullResult,
 } from "@/lib/thriski-api";
+
+const IDENTITY_VERIFICATION_CHECK_TYPES = new Set(["identity_verification_kyc", "identity_verification_kyb"]);
 
 export function ClientAccreditationDetailView({ id }: { id: string }) {
   const router = useRouter();
@@ -37,6 +42,10 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
 
   const [itemisedReasons, setItemisedReasons] = useState("");
   const [rationale, setRationale] = useState("");
+  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
+  const [fullResults, setFullResults] = useState<Record<string, VerificationFullResult>>({});
+  const [verificationBusy, setVerificationBusy] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
 
   const refresh = useCallback(async (activeToken: string) => {
     const [ctxResult, outstandingResult, confirmationsResult] = await Promise.all([
@@ -77,6 +86,35 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
       setActionError(err instanceof ApiError ? err.message : "That action didn't go through.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onToggleFullResult(checkResultId: string) {
+    if (expandedResultId === checkResultId) {
+      setExpandedResultId(null);
+      return;
+    }
+    setExpandedResultId(checkResultId);
+    if (!token || fullResults[checkResultId]) return;
+    try {
+      const result = await getVerificationCheckResult(token, checkResultId);
+      setFullResults((prev) => ({ ...prev, [checkResultId]: result }));
+    } catch (err) {
+      setVerificationError(err instanceof ApiError ? err.message : "Could not load the full result.");
+    }
+  }
+
+  async function onDecideVerification(checkResultId: string, decision: "approve" | "decline") {
+    if (!token) return;
+    setVerificationError(null);
+    setVerificationBusy(checkResultId);
+    try {
+      await decideVerification(token, checkResultId, decision);
+      await refresh(token);
+    } catch (err) {
+      setVerificationError(err instanceof ApiError ? err.message : "That decision didn't go through.");
+    } finally {
+      setVerificationBusy(null);
     }
   }
 
@@ -190,14 +228,75 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
             {checkResults.length === 0 ? (
               <p className="text-sm text-muted-foreground">None yet.</p>
             ) : (
-              <ul className="text-sm text-foreground">
-                {checkResults.map((c, i) => (
-                  <li key={i}>
-                    {c.check_type}: {c.outcome}
-                  </li>
-                ))}
+              <ul className="space-y-2 text-sm text-foreground">
+                {checkResults.map((c) => {
+                  const isIdentityVerification = IDENTITY_VERIFICATION_CHECK_TYPES.has(c.check_type);
+                  const subjectStatus =
+                    c.subject_type === "broker_profile"
+                      ? (profile as { status?: string } | null)?.status
+                      : (business as { status?: string } | null)?.status;
+                  const pendingDecision = isIdentityVerification && c.job_status === "completed" && subjectStatus === "in_verification";
+                  const full = fullResults[c.id];
+                  return (
+                    <li key={c.id} className="border-b border-border pb-2 last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>
+                          {c.check_type}: {c.outcome}
+                        </span>
+                        {isIdentityVerification && (
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                            onClick={() => onToggleFullResult(c.id)}
+                          >
+                            {expandedResultId === c.id ? "Hide" : "View full result"}
+                          </button>
+                        )}
+                      </div>
+                      {expandedResultId === c.id && (
+                        <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                          {!full ? (
+                            <p>Loading…</p>
+                          ) : (
+                            <>
+                              <p>Provider: {String(full.checkResult.provider ?? "—")}</p>
+                              <p>Job status: {String(full.checkResult.job_status ?? "—")}</p>
+                              <p>Recorded: {full.checkResult.created_at ? new Date(String(full.checkResult.created_at)).toLocaleString() : "—"}</p>
+                              {full.evidence && (
+                                <>
+                                  <p>Evidence source: {String(full.evidence.source ?? "—")}</p>
+                                  <p>Evidence method: {String(full.evidence.method ?? "—")}</p>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                      {pendingDecision && (
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            size="sm"
+                            disabled={verificationBusy === c.id}
+                            onClick={() => onDecideVerification(c.id, "approve")}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={verificationBusy === c.id}
+                            onClick={() => onDecideVerification(c.id, "decline")}
+                          >
+                            Decline
+                          </Button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
+            {verificationError && <p className="mt-2 text-xs text-destructive">{verificationError}</p>}
           </div>
         </CardContent>
       </Card>

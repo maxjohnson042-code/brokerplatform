@@ -204,10 +204,35 @@ export type MyAffiliation = {
   legal_name: string | null;
   trading_name: string | null;
   entity_type: string | null;
+  business_status: string | null;
 };
 
 export function listMyAffiliations(token: string): Promise<MyAffiliation[]> {
   return apiFetch("/businesses/me/affiliations", { token });
+}
+
+// ---- identity verification (IDV-*, Epic 6) ----
+
+export function initiateKyc(token: string): Promise<{ hostedLinkUrl?: string }> {
+  return apiFetch("/verification/kyc", { method: "POST", token });
+}
+
+export function initiateKyb(token: string, businessId: string): Promise<{ ok: true }> {
+  return apiFetch(`/verification/kyb/${businessId}`, { method: "POST", token });
+}
+
+// IDV-006/010: the full, un-summarized check_result + evidence metadata for one result.
+export type VerificationFullResult = {
+  checkResult: Record<string, unknown>;
+  evidence: Record<string, unknown> | null;
+};
+export function getVerificationCheckResult(token: string, checkResultId: string): Promise<VerificationFullResult> {
+  return apiFetch(`/verification/check-results/${checkResultId}`, { token });
+}
+
+// IDV-005: reviewer decide, distinct from whatever outcome the provider itself returned.
+export function decideVerification(token: string, checkResultId: string, decision: "approve" | "decline"): Promise<{ ok: true }> {
+  return apiFetch(`/verification/check-results/${checkResultId}/decide`, { method: "POST", token, body: JSON.stringify({ decision }) });
 }
 
 // ---- client_user auth (AUTH-002/006 — MFA is mandatory, never optional) ----
@@ -352,7 +377,7 @@ export type AccreditationFullContext = {
   profile: Record<string, unknown> | null;
   business: Record<string, unknown> | null;
   evidence: Array<{ id: string; document_type: string | null; expiry_date: string | null; original_filename: string | null }>;
-  checkResults: Array<{ check_type: string; outcome: string }>;
+  checkResults: Array<{ id: string; check_type: string; outcome: string; job_status: string; subject_type: string; subject_id: string }>;
   decisions: AccreditationDecision[];
 };
 

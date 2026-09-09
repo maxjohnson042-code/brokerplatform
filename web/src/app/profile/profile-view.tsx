@@ -23,6 +23,7 @@ import {
   removeAssociationMembership,
   listMyAccessHistory,
   getReconstruction,
+  initiateKyc,
   type BrokerProfile,
   type OutstandingItem,
   type AssociationMembership,
@@ -133,6 +134,8 @@ export function ProfileView() {
   const [asOfDate, setAsOfDate] = useState("");
   const [reconstruction, setReconstruction] = useState<Reconstruction | null>(null);
   const [reconstructionError, setReconstructionError] = useState<string | null>(null);
+  const [kycStarting, setKycStarting] = useState(false);
+  const [kycError, setKycError] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, formState } = useForm<FormValues>();
 
@@ -216,6 +219,24 @@ export function ProfileView() {
             ? err.message
             : "Could not submit your profile.",
       );
+    }
+  }
+
+  async function onStartKyc() {
+    if (!token) return;
+    setKycError(null);
+    setKycStarting(true);
+    try {
+      const result = await initiateKyc(token);
+      if (result.hostedLinkUrl) {
+        window.location.href = result.hostedLinkUrl;
+        return;
+      }
+      await refresh(token);
+    } catch (err) {
+      setKycError(err instanceof ApiError ? err.message : "Could not start verification.");
+    } finally {
+      setKycStarting(false);
     }
   }
 
@@ -470,6 +491,40 @@ export function ProfileView() {
               ) : (
                 <Button type="button" variant="outline" onClick={onAttest} disabled={!editable}>
                   I&apos;ve read and agree to the privacy policy and terms
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Identity verification</CardTitle>
+              <CardDescription>IDV-001/002 — a quick check via Sumsub.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {profile.status === "in_verification" && (
+                <p className="text-sm text-status-info-fg">
+                  Verification is in progress with Sumsub — you&apos;ll be notified once it&apos;s complete.
+                </p>
+              )}
+              {profile.status === "verified" && (
+                <p className="text-sm text-status-success-fg">Identity verified.</p>
+              )}
+              {profile.status === "attention_required" && (
+                <p className="text-sm text-status-warning-fg">
+                  A reviewer needs more information. You may need to complete verification again.
+                </p>
+              )}
+              {kycError && <p className="text-xs text-destructive">{kycError}</p>}
+              {profile.status !== "in_verification" && (
+                <Button type="button" variant="outline" size="sm" disabled={kycStarting} onClick={onStartKyc}>
+                  {kycStarting
+                    ? "Starting…"
+                    : profile.status === "verified"
+                      ? "Re-verify"
+                      : profile.status === "attention_required"
+                        ? "Retry verification"
+                        : "Start verification"}
                 </Button>
               )}
             </CardContent>

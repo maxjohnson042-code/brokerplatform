@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BusinessForm } from "./business-form";
+import { BusinessList } from "./business-list";
 
 export default function BusinessPage() {
   return (
@@ -19,6 +20,8 @@ export default function BusinessPage() {
           <BusinessForm />
         </CardContent>
       </Card>
+
+      <BusinessList />
     </div>
   );
 }
