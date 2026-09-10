@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Body,
   Controller,
-  ForbiddenException,
   Get,
   NotFoundException,
   Param,
@@ -99,11 +98,18 @@ export class EvidenceController {
     // is what actually proves the caller holds an active affiliation — a broker with
     // none, or only a pending one, gets null back here, same as everywhere else this
     // check is needed.
+    //
+    // Deliberately NOT gated on business.status the way the rest of the business
+    // form is (assertEditable's draft/attention_required-only rule) — that rule
+    // exists to stop editing structured fields a reviewer may already be acting on
+    // (ONB-008's reasoning), which doesn't apply to documents. Several document
+    // types are explicitly periodic-renewal by design (Section 14: police check
+    // 3–12 months, PI certificate annual), and DOC-006's whole versioning/supersede
+    // mechanism exists specifically so a broker can upload a renewed document without
+    // touching anything else — locking upload post-submission defeated that. Matches
+    // uploadForProfile below, which never had this restriction.
     const business = await getBusiness(ctx, businessId);
     if (!business) throw new NotFoundException();
-    if (business.status !== 'draft' && business.status !== 'attention_required') {
-      throw new ForbiddenException(`documents cannot be added while business status is '${business.status}'`);
-    }
 
     const { id } = await repo.uploadDocument({
       subjectType: 'broker_business',
