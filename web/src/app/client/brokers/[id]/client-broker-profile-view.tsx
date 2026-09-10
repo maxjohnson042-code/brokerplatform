@@ -24,6 +24,7 @@ import {
   type Accreditation,
   type OrganisationRelationship,
 } from "@/lib/thriski-api";
+import { requestedAgoLabel, trainingDeadlineLabel, documentExpiryLabel } from "@/lib/date-labels";
 
 // Mirrors relationships-view.tsx's own SCOPE_DESCRIPTIONS — small enough not to be
 // worth extracting into a shared module for one more read-only caller.
@@ -230,21 +231,28 @@ export function ClientBrokerProfileView({ brokerId }: { brokerId: string }) {
             <p className="text-sm text-muted-foreground">None uploaded.</p>
           ) : (
             <ul className="space-y-2 text-sm">
-              {documents.map((d) => (
-                <li key={d.id} className="flex items-center justify-between gap-2">
-                  <span>
-                    {d.document_type.replace(/_/g, " ")}
-                    {d.expiry_date && <span className="ml-2 text-xs text-muted-foreground">expires {new Date(d.expiry_date).toLocaleDateString()}</span>}
-                  </span>
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-                    onClick={() => downloadDocument(token, d.id, d.original_filename ?? d.document_type)}
-                  >
-                    Download
-                  </button>
-                </li>
-              ))}
+              {documents.map((d) => {
+                const expiry = d.expiry_date ? documentExpiryLabel(d.expiry_date) : null;
+                return (
+                  <li key={d.id} className="flex items-center justify-between gap-2">
+                    <span>
+                      {d.document_type.replace(/_/g, " ")}
+                      {expiry && (
+                        <span className={expiry.overdue ? "ml-2 text-xs font-medium text-status-danger-fg" : "ml-2 text-xs text-muted-foreground"}>
+                          {expiry.label}
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                      onClick={() => downloadDocument(token, d.id, d.original_filename ?? d.document_type)}
+                    >
+                      Download
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>
@@ -259,19 +267,36 @@ export function ClientBrokerProfileView({ brokerId }: { brokerId: string }) {
             <p className="text-sm text-muted-foreground">No accreditations requested yet.</p>
           ) : (
             <ul className="space-y-2">
-              {accreditations.map((a) => (
-                <li key={a.id}>
-                  <Link
-                    href={`/client/accreditations/${a.id}`}
-                    className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
-                  >
-                    <span>
-                      {a.brand} — {a.role} <span className="text-muted-foreground">· {a.classification.replace(/_/g, " ")}</span>
-                    </span>
-                    <StatusBadge domain="accreditation" value={a.status} />
-                  </Link>
-                </li>
-              ))}
+              {accreditations.map((a) => {
+                const training = a.status === "pending" && a.training_deadline_at ? trainingDeadlineLabel(a.training_deadline_at) : null;
+                return (
+                  <li key={a.id}>
+                    <Link
+                      href={`/client/accreditations/${a.id}`}
+                      className="block rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span>
+                          {a.brand} — {a.role}{" "}
+                          <span className="text-muted-foreground">
+                            · {a.classification.replace(/_/g, " ")} · {a.product_scope}
+                          </span>
+                        </span>
+                        <StatusBadge domain="accreditation" value={a.status} />
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {requestedAgoLabel(a.requested_at)}
+                        {a.current_decision_step === "senior_approver" && (
+                          <span className="ml-2 font-medium text-status-warning-fg">Escalated — senior approver required</span>
+                        )}
+                        {training && (
+                          <span className={training.overdue ? "ml-2 font-medium text-status-danger-fg" : "ml-2"}>{training.label}</span>
+                        )}
+                      </p>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>

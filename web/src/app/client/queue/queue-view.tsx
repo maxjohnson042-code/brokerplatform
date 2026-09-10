@@ -17,6 +17,7 @@ import {
   type QueueAccreditation,
   type AccreditationStatus,
 } from "@/lib/thriski-api";
+import { requestedAgoLabel, trainingDeadlineLabel } from "@/lib/date-labels";
 
 const STATUS_OPTIONS: { value: AccreditationStatus | ""; label: string }[] = [
   { value: "", label: "All statuses" },
@@ -29,28 +30,6 @@ const STATUS_OPTIONS: { value: AccreditationStatus | ""; label: string }[] = [
   { value: "lapsed", label: "Lapsed" },
   { value: "party_changed_pending", label: "Party changed — pending" },
 ];
-
-function daysSince(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function daysUntil(iso: string): number {
-  return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-}
-
-function requestedAgoLabel(requestedAt: string): string {
-  const days = daysSince(requestedAt);
-  if (days <= 0) return "Requested today";
-  if (days === 1) return "Requested 1 day ago";
-  return `Requested ${days} days ago`;
-}
-
-function trainingDeadlineLabel(deadline: string): { label: string; overdue: boolean } {
-  const days = daysUntil(deadline);
-  if (days < 0) return { label: `Training overdue by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`, overdue: true };
-  if (days === 0) return { label: "Training due today", overdue: true };
-  return { label: `Training due in ${days} day${days === 1 ? "" : "s"}`, overdue: days <= 7 };
-}
 
 export function QueueView() {
   const router = useRouter();
