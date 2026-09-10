@@ -25,9 +25,13 @@ import { defaultImageStorage, extensionFor } from '../../media/image-storage';
 // user management — never an id from the request. Reuses
 // updateClientOrganisationSetting (identity.repository.ts), the same write path
 // PlatformAdminOrgController's branding endpoint already uses.
+//
+// GET is deliberately NOT @Roles-gated (moved off the class level to just the two
+// mutation handlers below) — any authenticated client_user needs to read their own
+// org's name/logo (e.g. the lender dashboard header), not just a client_admin. Still
+// scoped to the caller's own org via requireClientOrgId; read-only, no new exposure.
 @Controller('client-admin/organisation')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('client_admin')
 export class ClientOrganisationAdminController {
   private requireClientOrgId(ctx: AuthorizationContext): string {
     if (ctx.actorType !== 'client_user') throw new NotFoundException();
@@ -43,6 +47,7 @@ export class ClientOrganisationAdminController {
   }
 
   @Patch('branding')
+  @Roles('client_admin')
   async setBranding(@CurrentAuthContext() ctx: AuthorizationContext, @Body() dto: SetBrandingDto) {
     const orgId = this.requireClientOrgId(ctx);
     await repo.updateClientOrganisationSetting(ctx, orgId, 'branding', dto);
@@ -50,6 +55,7 @@ export class ClientOrganisationAdminController {
   }
 
   @Post('logo')
+  @Roles('client_admin')
   @UseInterceptors(FileInterceptor('file', {
     limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (_req, file, callback) => callback(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)),

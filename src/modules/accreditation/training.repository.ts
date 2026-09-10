@@ -78,6 +78,20 @@ export async function activateAccreditation(
       clientOrganisationId: accreditation.lender_client_organisation_id,
     });
 
+    // Platform Broker ID (migration 0031): generated once, the first time this broker
+    // is EVER activated with any lender — COALESCE makes this idempotent across a
+    // broker's later activations with other lenders, never regenerating it.
+    // broker_profiles_self_write's RLS only permits 'system'/'platform_admin' or the
+    // broker's own ctx, never a client_user — this activation is always a client_user
+    // (or system) call, so the same transaction-local escalate-and-restore
+    // flagPartyChanged uses elsewhere in this codebase is needed here too.
+    await client.query(`SELECT set_config('app.actor_type', 'system', true)`);
+    await client.query(
+      `UPDATE broker_profiles SET platform_broker_id = COALESCE(platform_broker_id, gen_random_uuid()) WHERE id = $1`,
+      [accreditation.broker_profile_id],
+    );
+    await client.query(`SELECT set_config('app.actor_type', $1, true)`, [ctx.actorType]);
+
     // NOT-003: a summary notification, not a document pack — see the Epic 12 plan's
     // Scope decision (no commission-schedule/code-of-conduct content system exists).
     const { rows: orgRows } = await client.query(`SELECT name FROM client_organisations WHERE id = $1`, [accreditation.lender_client_organisation_id]);

@@ -381,7 +381,10 @@ export async function hasActiveRelationshipWithBroker(
  * representative business, not all of them — the full list is on the broker-profile
  * page's own Business affiliations card). The accreditation counts are a second
  * LATERAL rather than two separate scalar subqueries, scoped to THIS lender only via
- * r.client_organisation_id.
+ * r.client_organisation_id. The aggregator/association LATERALs added for the
+ * dashboard's "mix" cards are broker-wide, not scoped to this lender — association
+ * memberships were never lender-scoped to begin with, and the aggregator lookup is
+ * deliberately the one broker-mediated cross-org read migration 0030 permits.
  */
 export async function listOrganisationRelationships(
   ctx: AuthorizationContext,
@@ -398,7 +401,9 @@ export async function listOrganisationRelationships(
                   AND e.valid_to IS NULL AND e.document_type IS NOT NULL
               ) AS document_count,
               COALESCE(acc.accreditation_count, 0) AS accreditation_count,
-              COALESCE(acc.active_accreditation_count, 0) AS active_accreditation_count
+              COALESCE(acc.active_accreditation_count, 0) AS active_accreditation_count,
+              agg.org_name AS aggregator_organisation_name, agg.org_logo_url AS aggregator_organisation_logo_url,
+              assoc.names AS association_names
        FROM relationships r
        LEFT JOIN broker_profiles bp ON bp.id = r.broker_profile_id
        LEFT JOIN LATERAL (
@@ -415,6 +420,24 @@ export async function listOrganisationRelationships(
          FROM accreditations a2
          WHERE a2.broker_profile_id = r.broker_profile_id AND a2.lender_client_organisation_id = r.client_organisation_id
        ) acc ON true
+       -- Migration 0030: readable only because that migration's new RLS branches
+       -- grant a client_user visibility into a DIFFERENT org's aggregator_membership
+       -- relationship row (and that org's own id/name/logo) for a broker they already
+       -- have an active relationship with — never a lender_panel row from elsewhere.
+       LEFT JOIN LATERAL (
+         SELECT r2.client_organisation_id AS org_id, co.name AS org_name,
+                co.settings->'branding'->>'logoUrl' AS org_logo_url
+         FROM relationships r2
+         JOIN client_organisations co ON co.id = r2.client_organisation_id
+         WHERE r2.broker_profile_id = r.broker_profile_id AND r2.type = 'aggregator_membership' AND r2.status = 'active'
+         ORDER BY r2.created_at DESC
+         LIMIT 1
+       ) agg ON true
+       LEFT JOIN LATERAL (
+         SELECT array_agg(DISTINCT am.association_name) AS names
+         FROM association_memberships am
+         WHERE am.broker_profile_id = r.broker_profile_id
+       ) assoc ON true
        WHERE r.client_organisation_id = $1
        ORDER BY r.created_at DESC`,
       [clientOrganisationId],

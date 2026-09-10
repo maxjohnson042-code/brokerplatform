@@ -59,7 +59,7 @@ export async function getBrokerProfile(
               phone_number, mobile_number, address, postal_address, right_to_work_status,
               experience_years, licence_type_held, credit_licence_number,
               credit_representative_number, licensing_entity_name, licensing_entity_number,
-              photo_url, status, attested_terms_at, created_at, updated_at
+              photo_url, status, attested_terms_at, platform_broker_id, created_at, updated_at
        FROM broker_profiles WHERE id = $1`,
       [brokerProfileId],
     );
