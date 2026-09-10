@@ -12,6 +12,7 @@ import {
   ListChecks,
   LogIn,
   Palette,
+  Settings,
   ShieldCheck,
   UserCircle,
   UserPlus,
@@ -45,6 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/client/relationships", label: "Broker panel", icon: Users },
       { href: "/client/queue", label: "Review queue", icon: ClipboardCheck },
+      { href: "/client/settings", label: "Organisation settings", icon: Settings },
     ],
   },
 ];

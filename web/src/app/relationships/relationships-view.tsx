@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
@@ -13,6 +14,7 @@ import {
   acceptInvitation,
   declineInvitation,
   revokeRelationship,
+  mediaUrl,
   type MyRelationship,
 } from "@/lib/thriski-api";
 
@@ -132,12 +134,26 @@ export function RelationshipsView() {
             return (
               <Card key={r.id}>
                 <CardHeader className="flex-row items-start justify-between space-y-0">
-                  <div>
-                    <CardTitle>{r.client_organisation_name ?? "Unknown organisation"}</CardTitle>
-                    <CardDescription>
-                      {TYPE_LABELS[r.type] ?? r.type}
-                      {r.client_organisation_type ? ` · ${r.client_organisation_type}` : ""}
-                    </CardDescription>
+                  <div className="flex items-center gap-3">
+                    {r.client_organisation_logo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={mediaUrl(r.client_organisation_logo_url)}
+                        alt=""
+                        className="h-9 w-9 shrink-0 rounded-md border border-border object-contain bg-card"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-secondary-foreground">
+                        <Building2 className="h-4 w-4" />
+                      </div>
+                    )}
+                    <div>
+                      <CardTitle>{r.client_organisation_name ?? "Unknown organisation"}</CardTitle>
+                      <CardDescription>
+                        {TYPE_LABELS[r.type] ?? r.type}
+                        {r.client_organisation_type ? ` · ${r.client_organisation_type}` : ""}
+                      </CardDescription>
+                    </div>
                   </div>
                   <StatusBadge domain="relationship" value={r.status} />
                 </CardHeader>

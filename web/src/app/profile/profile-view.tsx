@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,12 +25,17 @@ import {
   listMyAccessHistory,
   getReconstruction,
   initiateKyc,
+  uploadProfilePhoto,
+  mediaUrl,
   type BrokerProfile,
   type OutstandingItem,
   type AssociationMembership,
   type AccessHistoryEntry,
   type Reconstruction,
 } from "@/lib/thriski-api";
+
+// Leaflet touches `window` at mount time — never safe to render during SSR.
+const AddressMap = dynamic(() => import("@/components/address-map").then((m) => m.AddressMap), { ssr: false });
 
 const GENDERS = ["male", "female", "other"];
 const LICENCE_TYPES = [
@@ -59,6 +65,11 @@ type FormValues = {
   licensingEntityName: string;
   licensingEntityNumber: string;
 };
+
+function formatAddress(address: BrokerProfile["address"]): string {
+  if (!address) return "";
+  return [address.line1, address.line2, address.city, address.state, address.postcode].filter(Boolean).join(", ");
+}
 
 function profileToFormValues(profile: BrokerProfile): FormValues {
   return {
@@ -136,6 +147,8 @@ export function ProfileView() {
   const [reconstructionError, setReconstructionError] = useState<string | null>(null);
   const [kycStarting, setKycStarting] = useState(false);
   const [kycError, setKycError] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, formState } = useForm<FormValues>();
 
@@ -240,6 +253,22 @@ export function ProfileView() {
     }
   }
 
+  async function onUploadPhoto(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!token || !file) return;
+    setPhotoError(null);
+    setPhotoUploading(true);
+    try {
+      await uploadProfilePhoto(token, file);
+      await refresh(token);
+    } catch (err) {
+      setPhotoError(err instanceof ApiError ? err.message : "Could not upload your photo.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
   function onLogout() {
     clearToken();
     router.replace("/login");
@@ -277,9 +306,27 @@ export function ProfileView() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
       <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Your profile</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{profile.email}</p>
+        <div className="flex items-center gap-4">
+          <label className="group relative flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-secondary text-lg font-semibold text-secondary-foreground">
+            {profile.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={mediaUrl(profile.photo_url)} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span>
+                {(profile.first_name?.[0] ?? "").toUpperCase()}
+                {(profile.last_name?.[0] ?? "").toUpperCase()}
+              </span>
+            )}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+              {photoUploading ? "Uploading…" : "Change"}
+            </span>
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={onUploadPhoto} disabled={photoUploading} />
+          </label>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Your profile</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{profile.email}</p>
+            {photoError && <p className="mt-1 text-xs text-destructive">{photoError}</p>}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge domain="profile" value={profile.status} />
@@ -557,6 +604,16 @@ export function ProfileView() {
                   Submit
                 </Button>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Your address on the map</CardTitle>
+              <CardDescription>Based on your saved residential address.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {token && <AddressMap token={token} address={formatAddress(profile.address)} />}
             </CardContent>
           </Card>
 

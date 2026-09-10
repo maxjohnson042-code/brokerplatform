@@ -66,49 +66,50 @@
   --status-neutral-fg: #475569;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0e1a;
-    --foreground: #e2e8f0;
+/* Light is the enforced default regardless of OS/browser preference — this only
+   applies when something explicitly sets data-theme="dark" on :root, which nothing
+   does today. Kept (not deleted) as the palette for a future explicit toggle. */
+:root[data-theme="dark"] {
+  --background: #0a0e1a;
+  --foreground: #e2e8f0;
 
-    /* Lighter than --background, same "card floats above the canvas" logic as light
-       mode — the two themes should feel like the same product, not two different
-       skins glued together. */
-    --card: #131a2b;
-    --card-foreground: #e2e8f0;
+  /* Lighter than --background, same "card floats above the canvas" logic as light
+     mode — the two themes should feel like the same product, not two different
+     skins glued together. */
+  --card: #131a2b;
+  --card-foreground: #e2e8f0;
 
-    --primary: #818cf8;
-    --primary-hover: #a5b4fc;
-    --primary-foreground: #0a0e1a;
+  --primary: #818cf8;
+  --primary-hover: #a5b4fc;
+  --primary-foreground: #0a0e1a;
 
-    --secondary: #1a2333;
-    --secondary-foreground: #e2e8f0;
+  --secondary: #1a2333;
+  --secondary-foreground: #e2e8f0;
 
-    --muted: #1a2333;
-    --muted-foreground: #94a3b8;
+  --muted: #1a2333;
+  --muted-foreground: #94a3b8;
 
-    --accent: #1e2540;
-    --accent-foreground: #c7d2fe;
+  --accent: #1e2540;
+  --accent-foreground: #c7d2fe;
 
-    --destructive: #f87171;
-    --destructive-hover: #fca5a5;
-    --destructive-foreground: #1f2937;
+  --destructive: #f87171;
+  --destructive-hover: #fca5a5;
+  --destructive-foreground: #1f2937;
 
-    --border: #232c40;
-    --input: #232c40;
-    --ring: #818cf8;
+  --border: #232c40;
+  --input: #232c40;
+  --ring: #818cf8;
 
-    --status-success-bg: #0f2c1c;
-    --status-success-fg: #86efac;
-    --status-warning-bg: #3a2a0a;
-    --status-warning-fg: #fbbf24;
-    --status-danger-bg: #3a1212;
-    --status-danger-fg: #fca5a5;
-    --status-info-bg: #0f2a4a;
-    --status-info-fg: #93c5fd;
-    --status-neutral-bg: #1e293b;
-    --status-neutral-fg: #cbd5e1;
-  }
+  --status-success-bg: #0f2c1c;
+  --status-success-fg: #86efac;
+  --status-warning-bg: #3a2a0a;
+  --status-warning-fg: #fbbf24;
+  --status-danger-bg: #3a1212;
+  --status-danger-fg: #fca5a5;
+  --status-info-bg: #0f2a4a;
+  --status-info-fg: #93c5fd;
+  --status-neutral-bg: #1e293b;
+  --status-neutral-fg: #cbd5e1;
 }
 
 @theme inline {

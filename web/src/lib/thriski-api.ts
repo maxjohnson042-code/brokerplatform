@@ -90,6 +90,7 @@ export type BrokerProfile = {
   credit_representative_number: string | null;
   licensing_entity_name: string | null;
   licensing_entity_number: string | null;
+  photo_url: string | null;
   status: string;
   attested_terms_at: string | null;
   created_at: string;
@@ -98,6 +99,25 @@ export type BrokerProfile = {
 
 export function getMyProfile(token: string): Promise<BrokerProfile> {
   return apiFetch("/brokers/me", { token });
+}
+
+// UI polish: profile photo upload — mirrors downloadDocument's auth pattern but for
+// an upload rather than a download (FormData + Bearer header, no JSON body).
+export async function uploadProfilePhoto(token: string, file: File): Promise<{ photoUrl: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/brokers/me/photo`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new ApiError(res.status, typeof data?.message === "string" ? data.message : res.statusText, data);
+  return data;
+}
+
+export function mediaUrl(path: string): string {
+  return `${API_BASE}${path}`;
 }
 
 export function updateMyProfile(token: string, patch: Record<string, unknown>): Promise<{ ok: true }> {
@@ -274,6 +294,7 @@ export type MyRelationship = {
   created_at: string;
   client_organisation_name: string | null;
   client_organisation_type: string | null;
+  client_organisation_logo_url: string | null;
 };
 
 export type OrganisationRelationship = {
@@ -566,6 +587,42 @@ export async function downloadDocument(token: string, evidenceId: string, filena
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ---- geocoding (map view for addresses, UI polish) ----
+
+export type GeocodeOutcome =
+  | { status: "found"; lat: number; lon: number; displayName: string }
+  | { status: "not_found" }
+  | { status: "error"; detail: string };
+
+export function geocodeAddress(token: string, address: string): Promise<GeocodeOutcome> {
+  return apiFetch(`/geocode?address=${encodeURIComponent(address)}`, { token });
+}
+
+// ---- client-admin organisation settings (lender logo, UI polish) ----
+
+export type MyOrganisation = { id: string; name: string; branding: { logoUrl?: string; primaryColor?: string } };
+
+export function getMyOrganisation(token: string): Promise<MyOrganisation> {
+  return apiFetch("/client-admin/organisation", { token });
+}
+
+export function setOrganisationBranding(token: string, branding: { logoUrl?: string; primaryColor?: string }): Promise<{ ok: true }> {
+  return apiFetch("/client-admin/organisation/branding", { method: "PATCH", token, body: JSON.stringify(branding) });
+}
+
+export async function uploadOrganisationLogo(token: string, file: File): Promise<{ logoUrl: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/client-admin/organisation/logo`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new ApiError(res.status, typeof data?.message === "string" ? data.message : res.statusText, data);
+  return data;
 }
 
 // ---- token storage ----
