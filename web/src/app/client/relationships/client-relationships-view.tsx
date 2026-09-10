@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
@@ -193,12 +194,28 @@ export function ClientRelationshipsView() {
               <Card key={r.id}>
                 <CardHeader className="flex-row items-start justify-between space-y-0">
                   <div>
-                    <CardTitle>{brokerName ?? r.email ?? "Broker"}</CardTitle>
+                    <CardTitle>
+                      {r.status === "active" ? (
+                        <Link href={`/client/brokers/${r.broker_profile_id}`} className="hover:underline">
+                          {brokerName ?? r.email ?? "Broker"}
+                        </Link>
+                      ) : (
+                        (brokerName ?? r.email ?? "Broker")
+                      )}
+                    </CardTitle>
                     <CardDescription>{TYPES.find((t) => t.value === r.type)?.label ?? r.type}</CardDescription>
                   </div>
                   <StatusBadge domain="relationship" value={r.status} />
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {r.status === "active" && (
+                    <Link
+                      href={`/client/brokers/${r.broker_profile_id}`}
+                      className="inline-block text-xs font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      View broker profile
+                    </Link>
+                  )}
                   {r.status === "active" && (
                     <div className="flex items-center gap-3">
                       <input

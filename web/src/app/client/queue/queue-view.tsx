@@ -14,7 +14,7 @@ import {
   getClientOrganisationIdFromToken,
   listAccreditationQueue,
   checkAccreditationLapse,
-  type Accreditation,
+  type QueueAccreditation,
   type AccreditationStatus,
 } from "@/lib/thriski-api";
 
@@ -34,7 +34,7 @@ export function QueueView() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [queue, setQueue] = useState<Accreditation[] | null>(null);
+  const [queue, setQueue] = useState<QueueAccreditation[] | null>(null);
   const [status, setStatus] = useState<AccreditationStatus | "">("");
   const [error, setError] = useState<string | null>(null);
   const [lapseMessage, setLapseMessage] = useState<string | null>(null);
@@ -114,23 +114,36 @@ export function QueueView() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {queue.map((a) => (
-            <Link key={a.id} href={`/client/accreditations/${a.id}`}>
-              <Card className="transition-colors hover:bg-muted/50">
-                <CardHeader className="flex-row items-start justify-between space-y-0">
-                  <div>
-                    <CardTitle>
-                      {a.brand} — {a.role}
-                    </CardTitle>
-                    <CardDescription>
-                      {a.classification.replace(/_/g, " ")} · {a.product_scope}
-                    </CardDescription>
-                  </div>
-                  <StatusBadge domain="accreditation" value={a.status} />
-                </CardHeader>
+          {queue.map((a) => {
+            const brokerName = a.broker_first_name && a.broker_last_name ? `${a.broker_first_name} ${a.broker_last_name}` : null;
+            return (
+              <Card key={a.id} className="transition-colors hover:bg-muted/50">
+                <Link href={`/client/accreditations/${a.id}`} className="block">
+                  <CardHeader className="flex-row items-start justify-between space-y-0">
+                    <div>
+                      <CardTitle>{brokerName ?? "Unnamed broker"}</CardTitle>
+                      <CardDescription>
+                        {a.business_legal_name ?? "Unnamed business"}
+                        {a.experience_years && ` · ${a.experience_years} yrs experience`}
+                      </CardDescription>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {a.brand} — {a.role} · {a.classification.replace(/_/g, " ")} · {a.product_scope}
+                      </p>
+                    </div>
+                    <StatusBadge domain="accreditation" value={a.status} />
+                  </CardHeader>
+                </Link>
+                <CardContent className="pt-0">
+                  <Link
+                    href={`/client/brokers/${a.broker_profile_id}`}
+                    className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    View broker profile
+                  </Link>
+                </CardContent>
               </Card>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

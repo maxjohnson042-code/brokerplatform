@@ -396,6 +396,17 @@ export type Accreditation = {
   created_at: string;
 };
 
+// Broker/business identity joined onto the queue's rows (accreditation.repository.ts's
+// listQueue) — null whenever the underlying relationship/affiliation is no longer
+// active (RLS still filters those columns even though the accreditation row itself
+// stays visible), so the queue view falls back to "Unnamed broker"/"Unnamed business".
+export type QueueAccreditation = Accreditation & {
+  broker_first_name: string | null;
+  broker_last_name: string | null;
+  experience_years: string | null;
+  business_legal_name: string | null;
+};
+
 export type AccreditationDecision = {
   id: string;
   accreditation_id: string;
@@ -445,7 +456,7 @@ export function listAccreditationQueue(
   token: string,
   lenderClientOrganisationId: string,
   filters: { status?: AccreditationStatus; classification?: AccreditationClassification; productScope?: string } = {},
-): Promise<Accreditation[]> {
+): Promise<QueueAccreditation[]> {
   const params = new URLSearchParams({ lenderClientOrganisationId, ...filters } as Record<string, string>);
   return apiFetch(`/accreditations/queue?${params.toString()}`, { token });
 }
@@ -481,6 +492,43 @@ export function recordInterview(token: string, id: string, recommendation: strin
 export function checkAccreditationLapse(token: string, lenderClientOrganisationId: string): Promise<{ lapsedIds: string[] }> {
   const params = new URLSearchParams({ lenderClientOrganisationId });
   return apiFetch(`/accreditations/check-lapse?${params.toString()}`, { method: "POST", token });
+}
+
+// ---- lender's-point-of-view broker profile (src/modules/brokers/client-broker-view.controller.ts) ----
+// Distinct endpoints from the broker's own /brokers/me — a client_user reading a
+// related broker's profile, businesses, associations, documents and accreditation
+// history with this lender. Backend re-checks the active relationship on every call;
+// RLS (migration 0021) is what actually makes the underlying reads possible at all.
+
+export function getClientBrokerProfile(token: string, brokerId: string): Promise<BrokerProfile> {
+  return apiFetch(`/client/brokers/${brokerId}`, { token });
+}
+
+export function listClientBrokerAssociations(token: string, brokerId: string): Promise<AssociationMembership[]> {
+  return apiFetch(`/client/brokers/${brokerId}/associations`, { token });
+}
+
+export function listClientBrokerDocuments(token: string, brokerId: string): Promise<DocumentRecord[]> {
+  return apiFetch(`/client/brokers/${brokerId}/documents`, { token });
+}
+
+export type ClientBrokerBusiness = {
+  id: string;
+  broker_business_id: string;
+  role: string;
+  status: string;
+  started_at: string;
+  legal_name: string | null;
+  trading_name: string | null;
+  entity_type: string | null;
+  business_status: string | null;
+};
+export function listClientBrokerBusinesses(token: string, brokerId: string): Promise<ClientBrokerBusiness[]> {
+  return apiFetch(`/client/brokers/${brokerId}/businesses`, { token });
+}
+
+export function listClientBrokerAccreditations(token: string, brokerId: string): Promise<Accreditation[]> {
+  return apiFetch(`/client/brokers/${brokerId}/accreditations`, { token });
 }
 
 // ---- training (TRN-*, confirmation not delivery — src/modules/accreditation/training.repository.ts) ----
