@@ -1,6 +1,7 @@
 import { withAuthorizationContext, AuthorizationContext } from '../../db/authorization-context';
 import { recordAuditEvent } from '../audit/audit.repository';
 import { recordMeteringEvent } from '../metering/metering.repository';
+import { ClientOrganisationType } from '../identity/identity.repository';
 
 export type RelationshipType = 'lender_panel' | 'aggregator_membership' | 'association_membership';
 
@@ -99,6 +100,36 @@ export async function requestRelationship(
     });
 
     return { id };
+  });
+}
+
+/**
+ * REL-001's other half: what a broker can actually search/select FROM, before any
+ * relationship exists — migration 0029's new broker-wide RLS branch (verified_at IS
+ * NOT NULL, status='active') is what makes this return anything at all. Deliberately
+ * selects only id/name/type/logoUrl — never the full `settings` jsonb — matching that
+ * migration's own comment: RLS grants row visibility, this function still decides
+ * what of the row is exposed.
+ */
+export async function listOrganisationsForDiscovery(
+  ctx: AuthorizationContext,
+  type?: ClientOrganisationType,
+): Promise<Array<{ id: string; name: string; type: ClientOrganisationType; logo_url: string | null }>> {
+  return withAuthorizationContext(ctx, async (client) => {
+    const params: unknown[] = [];
+    let where = '';
+    if (type) {
+      params.push(type);
+      where = `WHERE type = $${params.length}`;
+    }
+    const { rows } = await client.query(
+      `SELECT id, name, type, settings->'branding'->>'logoUrl' AS logo_url
+       FROM client_organisations
+       ${where}
+       ORDER BY name`,
+      params,
+    );
+    return rows;
   });
 }
 

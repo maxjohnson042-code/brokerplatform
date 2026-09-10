@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -46,6 +47,16 @@ export class RelationshipsController {
   async myRelationships(@CurrentAuthContext() ctx: AuthorizationContext) {
     const brokerProfileId = this.requireBroker(ctx);
     return repo.listMyRelationships(ctx, brokerProfileId);
+  }
+
+  // REL-001: what a broker can search/select from before any relationship exists.
+  @Get('discoverable-organisations')
+  async discoverableOrganisations(
+    @CurrentAuthContext() ctx: AuthorizationContext,
+    @Query('type') type?: 'lender' | 'aggregator' | 'association',
+  ) {
+    this.requireBroker(ctx);
+    return repo.listOrganisationsForDiscovery(ctx, type);
   }
 
   @Post('invitations')
