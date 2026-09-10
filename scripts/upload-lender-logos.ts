@@ -34,7 +34,7 @@ const LOGOS: Array<{ orgName: string; file: string }> = [
   { orgName: 'St.George Bank', file: 'st-george-bank-vector-logo.png' },
   { orgName: 'Suncorp Bank', file: 'suncorp.com.png' },
   { orgName: 'Westpac', file: 'westpac.webp' },
-  // Macquarie Bank: no source file supplied yet — skipped, not silently guessed.
+  { orgName: 'Macquarie Bank', file: 'Macquarie_Group_logo.jpg' },
 ];
 
 async function findOrgByName(name: string): Promise<{ id: string; branding: Record<string, unknown> } | null> {
@@ -69,7 +69,6 @@ async function main() {
     await updateClientOrganisationSetting({ actorType: 'system' }, org.id, 'branding', { ...org.branding, logoUrl });
     console.log(`SET  ${orgName}: ${logoUrl}`);
   }
-  console.log('\nMacquarie Bank still has no logo file — add one to the logos folder and re-run to pick it up.');
 }
 
 main()
