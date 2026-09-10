@@ -60,23 +60,35 @@ document-management system.
   Section 6.1a requirement IDs). Work through it epic by epic — later epics assume
   earlier ones exist (e.g. accreditation, Epic 10, needs relationships, Epic 8, and the
   ruleset engine, Epic 9, first).
-- **Epics 1-4 built**: platform foundations, identity/auth (JWT + mandatory client-user
-  MFA), broker profile build, broker business onboarding (including the ABN-lookup
-  create/search flow below). Epic 5 (documents) is next in sequence.
-- ID&V provider: **Sumsub**, both KYC (individual) and KYB (business) — OQ-16
-  resolved. Adapter shape is in `src/modules/verification/providers/`; the HTTP call
-  itself is stubbed pending sandbox credentials (see that file's comment).
+- **Epics 1-6 and 8-13 are built**: platform foundations, identity/auth, broker
+  profile build, broker business onboarding, documents/evidence store (Epic 5,
+  `src/modules/evidence/`), Sumsub identity verification (Epic 6,
+  `src/modules/verification/`), broker-lender relationships (Epic 8,
+  `src/modules/relationships/`), the ruleset engine (Epic 9, `src/modules/rulesets/`),
+  accreditations and the lender review workbench (Epic 10, `src/modules/accreditation/`),
+  training confirmation (Epic 11, `accreditation/training.repository.ts`), notifications
+  (Epic 12, `src/modules/notifications/`), and broker self-service/audit surfacing
+  (Epic 13, see `getOutstandingSummary`/`listAccessHistory`/`reconstructAsOf` in
+  `src/modules/brokers/brokers.repository.ts`). Epic 7 is the one gap in the sequence —
+  see below.
+- ID&V provider: **Sumsub**, KYC (individual) only — OQ-16 resolved. The adapter
+  (`src/modules/verification/providers/sumsub-adapter.ts`) makes a real call: it
+  creates an applicant and generates a real hosted WebSDK link (IDV-015). KYB
+  (business) is still a mock (`mock-kyb-adapter.ts`) — Sumsub's KYB tier isn't
+  provisioned on this account yet.
 - Business registry lookup (ONB-014/BUS-024): **Australia's ABN Lookup web service**,
   a free self-registered GUID rather than a paid credential — see
   `src/modules/businesses/providers/abn-lookup.provider.ts`. Unlike Sumsub this makes
   a *real* call whenever `ABR_ABN_LOOKUP_GUID` is set (no sandbox tier to wait for);
   degrades to an explicit `not_configured` result, never throws, when it isn't.
-- Open dependency: which register/bureau providers cover the non-Sumsub checks in
-  Epic 7 (business/company registers, licence and credit-representative currency,
-  banned-and-disqualified, adverse records, bankruptcy) is not yet decided.
-- Known schema gap, intentionally left visible rather than quietly patched: the
-  `relationships` table does not yet have row-level security enabled (see the comment
-  in `src/modules/relationships/relationships.repository.ts`). Close this in Epic 8.
+- Open dependency: **Epic 7 hasn't been built.** Which register/bureau providers
+  cover the non-Sumsub checks (business/company registers, licence and
+  credit-representative currency, banned-and-disqualified, adverse records,
+  bankruptcy) is not yet decided — there's no module for it yet.
+- The `relationships` table row-level security gap flagged in migration 0007 was
+  closed in migration 0021 (Epic 8): `has_active_relationship()` is now the
+  SECURITY DEFINER function other tables' policies call into, and RLS is enabled on
+  `relationships` itself. Not an open gap any more.
 
 ## Running it
 
