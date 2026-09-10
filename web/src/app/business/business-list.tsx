@@ -77,7 +77,6 @@ export function BusinessList() {
         {kybError && <p className="text-xs text-destructive">{kybError}</p>}
         {active.map((a) => {
           const status = a.business_status ?? "draft";
-          const editable = status === "draft" || status === "attention_required";
           const expanded = expandedId === a.broker_business_id;
           return (
             <div key={a.id} className="rounded-md border border-border p-3">
@@ -114,7 +113,11 @@ export function BusinessList() {
                   )}
                 </div>
               </div>
-              {expanded && <BusinessDocuments businessId={a.broker_business_id} editable={editable} />}
+              {/* Documents stay uploadable regardless of business status — several
+                  types (e.g. PI certificate) are explicitly periodic-renewal by
+                  design (Section 14, DOC-006's versioning), unlike the business
+                  form's own fields which lock once submitted. */}
+              {expanded && <BusinessDocuments businessId={a.broker_business_id} editable={true} />}
             </div>
           );
         })}

@@ -572,7 +572,14 @@ export function ProfileView() {
                   catalog={PROFILE_DOCUMENT_CATALOG}
                   documents={documents}
                   outstanding={documentOutstanding}
-                  editable={editable}
+                  // Unlike the personal-details form (locked once submitted, per
+                  // ONB-008 — a reviewer may already be acting on that data),
+                  // documents stay uploadable regardless of profile status: several
+                  // types are explicitly periodic-renewal (police check, PI
+                  // certificate — Section 14), and DOC-006's versioning exists
+                  // specifically so a renewed document can be uploaded without
+                  // reopening anything else.
+                  editable={true}
                   onUpload={onUploadDocument}
                   busyType={documentBusyType}
                   uploadError={documentUploadError}
