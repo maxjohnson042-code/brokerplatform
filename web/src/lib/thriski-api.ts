@@ -312,6 +312,13 @@ export type OrganisationRelationship = {
   first_name: string | null;
   last_name: string | null;
   email: string | null;
+  broker_profile_status: string | null;
+  experience_years: string | null;
+  business_legal_name: string | null;
+  business_status: string | null;
+  document_count: number;
+  accreditation_count: number;
+  active_accreditation_count: number;
 };
 
 // broker actor
@@ -396,15 +403,19 @@ export type Accreditation = {
   created_at: string;
 };
 
-// Broker/business identity joined onto the queue's rows (accreditation.repository.ts's
-// listQueue) — null whenever the underlying relationship/affiliation is no longer
-// active (RLS still filters those columns even though the accreditation row itself
-// stays visible), so the queue view falls back to "Unnamed broker"/"Unnamed business".
+// Broker/business identity and review-relevant signal joined onto the queue's rows
+// (accreditation.repository.ts's listQueue) — null/0 whenever the underlying
+// relationship/affiliation is no longer active (RLS still filters those columns even
+// though the accreditation row itself stays visible), so the queue view falls back to
+// "Unnamed broker"/"Unnamed business".
 export type QueueAccreditation = Accreditation & {
   broker_first_name: string | null;
   broker_last_name: string | null;
   experience_years: string | null;
+  broker_profile_status: string | null;
   business_legal_name: string | null;
+  business_status: string | null;
+  document_count: number;
 };
 
 export type AccreditationDecision = {

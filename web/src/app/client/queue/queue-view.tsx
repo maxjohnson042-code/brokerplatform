@@ -30,6 +30,28 @@ const STATUS_OPTIONS: { value: AccreditationStatus | ""; label: string }[] = [
   { value: "party_changed_pending", label: "Party changed — pending" },
 ];
 
+function daysSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function daysUntil(iso: string): number {
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function requestedAgoLabel(requestedAt: string): string {
+  const days = daysSince(requestedAt);
+  if (days <= 0) return "Requested today";
+  if (days === 1) return "Requested 1 day ago";
+  return `Requested ${days} days ago`;
+}
+
+function trainingDeadlineLabel(deadline: string): { label: string; overdue: boolean } {
+  const days = daysUntil(deadline);
+  if (days < 0) return { label: `Training overdue by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`, overdue: true };
+  if (days === 0) return { label: "Training due today", overdue: true };
+  return { label: `Training due in ${days} day${days === 1 ? "" : "s"}`, overdue: days <= 7 };
+}
+
 export function QueueView() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -116,6 +138,7 @@ export function QueueView() {
         <div className="space-y-4">
           {queue.map((a) => {
             const brokerName = a.broker_first_name && a.broker_last_name ? `${a.broker_first_name} ${a.broker_last_name}` : null;
+            const training = a.status === "pending" && a.training_deadline_at ? trainingDeadlineLabel(a.training_deadline_at) : null;
             return (
               <Card key={a.id} className="transition-colors hover:bg-muted/50">
                 <Link href={`/client/accreditations/${a.id}`} className="block">
@@ -126,12 +149,27 @@ export function QueueView() {
                         {a.business_legal_name ?? "Unnamed business"}
                         {a.experience_years && ` · ${a.experience_years} yrs experience`}
                       </CardDescription>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {a.brand} — {a.role} · {a.classification.replace(/_/g, " ")} · {a.product_scope}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {a.classification.replace(/_/g, " ")} · {a.product_scope} · {a.brand} — {a.role}
                       </p>
                     </div>
                     <StatusBadge domain="accreditation" value={a.status} />
                   </CardHeader>
+                  <CardContent className="flex flex-wrap items-center gap-2 pb-3 pt-0">
+                    {a.broker_profile_status && <StatusBadge domain="profile" value={a.broker_profile_status} />}
+                    {a.business_status && <StatusBadge domain="business" value={a.business_status} />}
+                    {a.current_decision_step === "senior_approver" && (
+                      <span className="inline-flex items-center rounded-full bg-status-warning-bg px-2.5 py-0.5 text-xs font-medium text-status-warning-fg">
+                        Escalated — senior approver required
+                      </span>
+                    )}
+                  </CardContent>
+                  <CardContent className="pb-3 pt-0 text-xs text-muted-foreground">
+                    {a.document_count} document{a.document_count === 1 ? "" : "s"} uploaded · {requestedAgoLabel(a.requested_at)}
+                    {training && (
+                      <span className={training.overdue ? "ml-2 font-medium text-status-danger-fg" : "ml-2"}> · {training.label}</span>
+                    )}
+                  </CardContent>
                 </Link>
                 <CardContent className="pt-0">
                   <Link

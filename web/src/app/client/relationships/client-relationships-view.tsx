@@ -203,10 +203,29 @@ export function ClientRelationshipsView() {
                         (brokerName ?? r.email ?? "Broker")
                       )}
                     </CardTitle>
-                    <CardDescription>{TYPES.find((t) => t.value === r.type)?.label ?? r.type}</CardDescription>
+                    <CardDescription>
+                      {TYPES.find((t) => t.value === r.type)?.label ?? r.type}
+                      {r.business_legal_name && ` · ${r.business_legal_name}`}
+                      {r.experience_years && ` · ${r.experience_years} yrs experience`}
+                    </CardDescription>
                   </div>
                   <StatusBadge domain="relationship" value={r.status} />
                 </CardHeader>
+                {r.status === "active" && (
+                  <CardContent className="flex flex-wrap items-center gap-2 pb-3 pt-0">
+                    {r.broker_profile_status && <StatusBadge domain="profile" value={r.broker_profile_status} />}
+                    {r.business_status && <StatusBadge domain="business" value={r.business_status} />}
+                  </CardContent>
+                )}
+                {r.status === "active" && (
+                  <CardContent className="pb-3 pt-0 text-xs text-muted-foreground">
+                    {r.document_count} document{r.document_count === 1 ? "" : "s"} uploaded ·{" "}
+                    {r.accreditation_count === 0
+                      ? "no accreditations with you"
+                      : `${r.accreditation_count} accreditation${r.accreditation_count === 1 ? "" : "s"} with you (${r.active_accreditation_count} active)`}
+                    {r.consented_at && ` · consented ${new Date(r.consented_at).toLocaleDateString()}`}
+                  </CardContent>
+                )}
                 <CardContent className="space-y-3">
                   {r.status === "active" && (
                     <Link
