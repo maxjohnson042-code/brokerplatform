@@ -27,6 +27,7 @@ import {
   type TrainingConfirmation,
   type VerificationFullResult,
 } from "@/lib/thriski-api";
+import { requestedAgoLabel, trainingDeadlineLabel, documentExpiryLabel } from "@/lib/date-labels";
 
 const IDENTITY_VERIFICATION_CHECK_TYPES = new Set(["identity_verification_kyc", "identity_verification_kyb"]);
 
@@ -136,8 +137,11 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
 
   const { accreditation, profile, business, evidence, checkResults, decisions } = context;
   const canDecide = accreditation.status === "requested" || accreditation.status === "exception_escalated";
-  const profileName = profile ? `${(profile as { first_name?: string }).first_name ?? ""} ${(profile as { last_name?: string }).last_name ?? ""}`.trim() : null;
-  const businessName = business ? (business as { legal_name?: string }).legal_name : null;
+  const p = profile as { first_name?: string; last_name?: string; email?: string; phone_number?: string; experience_years?: string; status?: string } | null;
+  const b = business as { legal_name?: string; status?: string } | null;
+  const profileName = p ? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() : null;
+  const escalated = accreditation.current_decision_step === "senior_approver";
+  const training = accreditation.status === "pending" && accreditation.training_deadline_at ? trainingDeadlineLabel(accreditation.training_deadline_at) : null;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
@@ -148,6 +152,11 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {accreditation.classification.replace(/_/g, " ")} · {accreditation.product_scope}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {requestedAgoLabel(accreditation.requested_at)}
+            {escalated && <span className="ml-2 font-medium text-status-warning-fg">Escalated — senior approver required</span>}
+            {training && <span className={training.overdue ? "ml-2 font-medium text-status-danger-fg" : "ml-2"}>{training.label}</span>}
           </p>
         </div>
         <StatusBadge domain="accreditation" value={accreditation.status} />
@@ -160,19 +169,23 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
       {/* REV-002: profile, business, checks and outstanding items on one screen. */}
       <div className="mb-6 grid gap-6 sm:grid-cols-2">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-start justify-between space-y-0">
             <CardTitle>Broker</CardTitle>
+            {p?.status && <StatusBadge domain="profile" value={p.status} />}
           </CardHeader>
           <CardContent className="text-sm text-foreground">
             {profileName || "—"}
-            {profile && <p className="text-muted-foreground">{(profile as { email?: string }).email}</p>}
+            {p?.email && <p className="text-muted-foreground">{p.email}</p>}
+            {p?.phone_number && <p className="text-muted-foreground">{p.phone_number}</p>}
+            {p?.experience_years && <p className="text-muted-foreground">{p.experience_years} years experience</p>}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-start justify-between space-y-0">
             <CardTitle>Business</CardTitle>
+            {b?.status && <StatusBadge domain="business" value={b.status} />}
           </CardHeader>
-          <CardContent className="text-sm text-foreground">{businessName || "—"}</CardContent>
+          <CardContent className="text-sm text-foreground">{b?.legal_name || "—"}</CardContent>
         </Card>
       </div>
 
@@ -208,18 +221,28 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
               <p className="text-sm text-muted-foreground">None uploaded.</p>
             ) : (
               <ul className="text-sm text-foreground">
-                {evidence.map((e) => (
-                  <li key={e.id} className="flex items-center justify-between gap-2">
-                    <span>{e.document_type ?? "unknown"}</span>
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-                      onClick={() => token && downloadDocument(token, e.id, e.original_filename ?? `${e.document_type ?? "document"}`)}
-                    >
-                      Download
-                    </button>
-                  </li>
-                ))}
+                {evidence.map((e) => {
+                  const expiry = e.expiry_date ? documentExpiryLabel(e.expiry_date) : null;
+                  return (
+                    <li key={e.id} className="flex items-center justify-between gap-2">
+                      <span>
+                        {e.document_type ?? "unknown"}
+                        {expiry && (
+                          <span className={expiry.overdue ? "ml-2 text-xs font-medium text-status-danger-fg" : "ml-2 text-xs text-muted-foreground"}>
+                            {expiry.label}
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                        onClick={() => token && downloadDocument(token, e.id, e.original_filename ?? `${e.document_type ?? "document"}`)}
+                      >
+                        Download
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -355,7 +378,12 @@ export function ClientAccreditationDetailView({ id }: { id: string }) {
             <CardDescription>
               TRN-005/006. Confirm platform/product training happened off-platform, then activate independently — confirming never
               auto-activates.
-              {accreditation.training_deadline_at && ` Deadline: ${new Date(accreditation.training_deadline_at).toLocaleDateString()}.`}
+              {accreditation.training_deadline_at && (
+                <span className={training?.overdue ? "ml-1 font-medium text-status-danger-fg" : undefined}>
+                  {" "}
+                  Deadline: {new Date(accreditation.training_deadline_at).toLocaleDateString()} ({training?.label}).
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
