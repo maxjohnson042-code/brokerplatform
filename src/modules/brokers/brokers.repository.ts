@@ -59,7 +59,7 @@ export async function getBrokerProfile(
               phone_number, mobile_number, address, postal_address, right_to_work_status,
               experience_years, licence_type_held, credit_licence_number,
               credit_representative_number, licensing_entity_name, licensing_entity_number,
-              status, attested_terms_at, created_at, updated_at
+              photo_url, status, attested_terms_at, created_at, updated_at
        FROM broker_profiles WHERE id = $1`,
       [brokerProfileId],
     );
@@ -130,6 +130,22 @@ export async function updateBrokerProfile(
       subjectId: brokerProfileId,
       detail: { fields: entries.map(([key]) => key) },
     });
+  });
+}
+
+/**
+ * UI polish: profile photo (avatar). Deliberately NOT gated by assertEditable —
+ * unlike the compliance fields updateBrokerProfile guards, a photo is cosmetic and
+ * doesn't affect accreditation state, so a broker can change it at any profile
+ * status, submitted or not.
+ */
+export async function updateMyPhoto(ctx: AuthorizationContext, brokerProfileId: string, photoUrl: string): Promise<void> {
+  return withAuthorizationContext(ctx, async (client) => {
+    const { rowCount } = await client.query(
+      `UPDATE broker_profiles SET photo_url = $2, updated_at = now() WHERE id = $1`,
+      [brokerProfileId, photoUrl],
+    );
+    if (rowCount === 0) throw new BrokerProfileNotFoundError(brokerProfileId);
   });
 }
 

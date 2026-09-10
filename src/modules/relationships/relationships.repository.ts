@@ -296,7 +296,8 @@ export async function listMyRelationships(
     const { rows } = await client.query(
       `SELECT r.id, r.client_organisation_id, r.type, r.status, r.shared_data_scope, r.consented_at,
               r.effective_from, r.effective_to, r.end_reason, r.created_at,
-              co.name AS client_organisation_name, co.type AS client_organisation_type
+              co.name AS client_organisation_name, co.type AS client_organisation_type,
+              co.settings->'branding'->>'logoUrl' AS client_organisation_logo_url
        FROM relationships r
        LEFT JOIN client_organisations co ON co.id = r.client_organisation_id
        WHERE r.broker_profile_id = $1

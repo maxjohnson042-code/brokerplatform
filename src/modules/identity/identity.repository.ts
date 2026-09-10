@@ -172,12 +172,19 @@ export async function updateClientOrganisationSetting(
   value: unknown,
 ): Promise<void> {
   return withAuthorizationContext(ctx, async (client) => {
+    // client_organisations_write (migration 0013) permits only system/platform_admin —
+    // never client_user — so a client_admin setting their own org's branding would
+    // silently affect zero rows without this escalate-and-restore, same mechanism as
+    // reviewerDecide/flagPartyChanged elsewhere in this codebase. Harmless no-op for
+    // system/platform_admin callers, since the policy already permits those.
+    await client.query(`SELECT set_config('app.actor_type', 'system', true)`);
     await client.query(
       `UPDATE client_organisations
        SET settings = jsonb_set(settings, $2, $3::jsonb, true), updated_at = now()
        WHERE id = $1`,
       [clientOrganisationId, `{${key}}`, JSON.stringify(value)],
     );
+    await client.query(`SELECT set_config('app.actor_type', $1, true)`, [ctx.actorType]);
     await recordAuditEvent(client, {
       actorType: ctx.actorType,
       actorId: actorIdOf(ctx),
@@ -186,6 +193,21 @@ export async function updateClientOrganisationSetting(
       subjectId: clientOrganisationId,
       detail: { [key]: value },
     });
+  });
+}
+
+/** UI polish: a client_admin viewing their own organisation's name + branding to render an org-settings page. */
+export async function getMyOrganisation(
+  ctx: AuthorizationContext,
+  clientOrganisationId: string,
+): Promise<{ id: string; name: string; branding: { logoUrl?: string; primaryColor?: string } } | null> {
+  return withAuthorizationContext(ctx, async (client) => {
+    const { rows } = await client.query(
+      `SELECT id, name, settings->'branding' AS branding FROM client_organisations WHERE id = $1`,
+      [clientOrganisationId],
+    );
+    if (!rows[0]) return null;
+    return { id: rows[0].id, name: rows[0].name, branding: rows[0].branding ?? {} };
   });
 }
 

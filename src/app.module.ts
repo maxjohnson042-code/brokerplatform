@@ -8,6 +8,8 @@ import { RelationshipsModule } from './modules/relationships/relationships.modul
 import { AccreditationModule } from './modules/accreditation/accreditation.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { EvidenceModule } from './modules/evidence/evidence.module';
+import { MediaModule } from './modules/media/media.module';
+import { GeocodingModule } from './modules/geocoding/geocoding.module';
 import { MonitoringModule } from './modules/monitoring/monitoring.module';
 import { ListsModule } from './modules/lists/lists.module';
 import { RulesetsModule } from './modules/rulesets/rulesets.module';
@@ -37,6 +39,8 @@ class HealthController {
     AccreditationModule,
     VerificationModule,
     EvidenceModule,
+    MediaModule,
+    GeocodingModule,
     MonitoringModule,
     ListsModule,
     RulesetsModule,

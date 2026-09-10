@@ -5,6 +5,7 @@ import { IdentityService } from './identity.service';
 import { BrokerAuthController } from './controllers/broker-auth.controller';
 import { ClientAuthController } from './controllers/client-auth.controller';
 import { ClientUserAdminController } from './controllers/client-user-admin.controller';
+import { ClientOrganisationAdminController } from './controllers/client-organisation-admin.controller';
 import { PlatformAdminAuthController } from './controllers/platform-admin-auth.controller';
 import { PlatformAdminOrgController } from './controllers/platform-admin-org.controller';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -26,6 +27,7 @@ import { PlatformAdminGuard } from './guards/platform-admin.guard';
     BrokerAuthController,
     ClientAuthController,
     ClientUserAdminController,
+    ClientOrganisationAdminController,
     PlatformAdminAuthController,
     PlatformAdminOrgController,
   ],

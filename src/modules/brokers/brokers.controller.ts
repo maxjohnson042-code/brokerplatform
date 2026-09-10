@@ -13,8 +13,12 @@ import {
   ConflictException,
   BadRequestException,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../identity/guards/jwt-auth.guard';
+import { defaultImageStorage, extensionFor } from '../media/image-storage';
 import { CurrentAuthContext } from '../identity/decorators/current-auth-context.decorator';
 import { AuthorizationContext } from '../../db/authorization-context';
 import { EMAIL_SENDER } from '../notifications/notifications.module';
@@ -58,6 +62,20 @@ export class BrokersController {
       throw this.mapProfileError(err);
     }
     return { ok: true };
+  }
+
+  @Post('photo')
+  @UseInterceptors(FileInterceptor('file', {
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, callback) => callback(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)),
+  }))
+  async uploadPhoto(@CurrentAuthContext() ctx: AuthorizationContext, @UploadedFile() file?: Express.Multer.File) {
+    const brokerProfileId = this.requireBroker(ctx);
+    if (!file) throw new BadRequestException('file is required (JPEG, PNG or WEBP, up to 5MB)');
+    const key = await defaultImageStorage.put(file.buffer, extensionFor(file.mimetype));
+    const photoUrl = `/media/${key}`;
+    await repo.updateMyPhoto(ctx, brokerProfileId, photoUrl);
+    return { photoUrl };
   }
 
   @Post('attest-terms')
