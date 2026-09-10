@@ -8,6 +8,7 @@ import {
   Building2,
   ClipboardCheck,
   KeyRound,
+  LayoutDashboard,
   Link2,
   ListChecks,
   LogIn,
@@ -34,6 +35,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Broker",
     items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/profile", label: "My profile", icon: UserCircle },
       { href: "/tasks", label: "Outstanding tasks", icon: ListChecks },
       { href: "/business", label: "My business", icon: Building2 },

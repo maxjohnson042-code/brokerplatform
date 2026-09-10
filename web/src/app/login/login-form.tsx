@@ -37,7 +37,7 @@ export function LoginForm() {
     try {
       const tokens = await loginBroker(values.email, values.password);
       storeToken(tokens.accessToken);
-      router.push("/profile");
+      router.push("/dashboard");
     } catch (err) {
       setSubmitState("error");
       setErrorMessage(err instanceof ApiError ? err.message : "Something went wrong — please try again.");
