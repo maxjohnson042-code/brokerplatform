@@ -373,6 +373,15 @@ export async function hasActiveRelationshipWithBroker(
  * relationship) — the relationship row itself must still show, with the broker's name
  * columns null until they accept. Same pattern businesses.repository.ts's
  * listMyAffiliations already uses for the identical reason.
+ *
+ * Also carries the same review-relevant signal the queue's listQueue enriched with —
+ * a bare name/status pair told a lender nothing about who they're actually looking at.
+ * The business columns come from a LATERAL picking this broker's most recently
+ * started ACTIVE affiliation (a broker can hold several; the panel shows one
+ * representative business, not all of them — the full list is on the broker-profile
+ * page's own Business affiliations card). The accreditation counts are a second
+ * LATERAL rather than two separate scalar subqueries, scoped to THIS lender only via
+ * r.client_organisation_id.
  */
 export async function listOrganisationRelationships(
   ctx: AuthorizationContext,
@@ -382,9 +391,30 @@ export async function listOrganisationRelationships(
     const { rows } = await client.query(
       `SELECT r.id, r.broker_profile_id, r.type, r.status, r.shared_data_scope, r.consented_at,
               r.effective_from, r.effective_to, r.end_reason, r.created_at,
-              bp.first_name, bp.last_name, bp.email
+              bp.first_name, bp.last_name, bp.email, bp.status AS broker_profile_status, bp.experience_years,
+              biz.legal_name AS business_legal_name, biz.status AS business_status,
+              (SELECT COUNT(*)::int FROM evidence e
+                WHERE e.subject_type = 'broker_profile' AND e.subject_id = r.broker_profile_id
+                  AND e.valid_to IS NULL AND e.document_type IS NOT NULL
+              ) AS document_count,
+              COALESCE(acc.accreditation_count, 0) AS accreditation_count,
+              COALESCE(acc.active_accreditation_count, 0) AS active_accreditation_count
        FROM relationships r
        LEFT JOIN broker_profiles bp ON bp.id = r.broker_profile_id
+       LEFT JOIN LATERAL (
+         SELECT bb.legal_name, bb.status
+         FROM business_affiliations ba
+         JOIN broker_businesses bb ON bb.id = ba.broker_business_id
+         WHERE ba.broker_profile_id = r.broker_profile_id AND ba.status = 'active'
+         ORDER BY ba.started_at DESC
+         LIMIT 1
+       ) biz ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS accreditation_count,
+                COUNT(*) FILTER (WHERE a2.status = 'active')::int AS active_accreditation_count
+         FROM accreditations a2
+         WHERE a2.broker_profile_id = r.broker_profile_id AND a2.lender_client_organisation_id = r.client_organisation_id
+       ) acc ON true
        WHERE r.client_organisation_id = $1
        ORDER BY r.created_at DESC`,
       [clientOrganisationId],

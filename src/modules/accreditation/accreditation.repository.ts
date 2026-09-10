@@ -238,19 +238,27 @@ export async function requestAccreditation(
 
 export type QueueFilters = { status?: AccreditationStatus; classification?: AccreditationClassification; productScope?: string };
 
-// Broker/business identity, joined in for the review queue's list rows (previously
-// bare brand/role/status, no broker name at all) — pg returns experience_years as a
-// string, same as broker_profiles' own type (see getOutstandingItems's Number() cast
-// above). LEFT JOIN, not JOIN: broker_profiles_visibility/broker_businesses_visibility
+// Broker/business identity and review-relevant signal, joined in for the review
+// queue's list rows — previously bare brand/role/status with no broker name and
+// nothing to triage on (a reviewer had to open every row to learn anything). LEFT
+// JOIN throughout, not JOIN: broker_profiles_visibility/broker_businesses_visibility
 // (migration 0021) still require an ACTIVE relationship/affiliation to show these
 // columns — an accreditation whose relationship has since ended keeps its row, just
 // with null identity columns, same defensive shape listMyAffiliations/
-// listOrganisationRelationships already use.
+// listOrganisationRelationships already use. pg returns experience_years as a string,
+// same as broker_profiles' own type (see getOutstandingItems's Number() cast above).
+// document_count is a correlated subquery, not a third JOIN — a business/profile can
+// have many current documents, and counting via JOIN would multiply accreditation
+// rows; at this scale (tens of rows per queue) a per-row subquery is simpler than a
+// LATERAL aggregate and costs nothing observable.
 export type QueueAccreditation = Accreditation & {
   broker_first_name: string | null;
   broker_last_name: string | null;
   experience_years: string | null;
+  broker_profile_status: string | null;
   business_legal_name: string | null;
+  business_status: string | null;
+  document_count: number;
 };
 
 export async function listQueue(ctx: AuthorizationContext, lenderClientOrganisationId: string, filters: QueueFilters = {}): Promise<QueueAccreditation[]> {
@@ -271,7 +279,12 @@ export async function listQueue(ctx: AuthorizationContext, lenderClientOrganisat
     }
     const { rows } = await client.query<QueueAccreditation>(
       `SELECT a.*, bp.first_name AS broker_first_name, bp.last_name AS broker_last_name, bp.experience_years,
-              bb.legal_name AS business_legal_name
+              bp.status AS broker_profile_status, bb.legal_name AS business_legal_name, bb.status AS business_status,
+              (SELECT COUNT(*)::int FROM evidence e
+                WHERE e.valid_to IS NULL AND e.document_type IS NOT NULL
+                  AND ((e.subject_type = 'broker_profile' AND e.subject_id = a.broker_profile_id)
+                    OR (e.subject_type = 'broker_business' AND e.subject_id = a.broker_business_id))
+              ) AS document_count
        FROM accreditations a
        LEFT JOIN broker_profiles bp ON bp.id = a.broker_profile_id
        LEFT JOIN broker_businesses bb ON bb.id = a.broker_business_id
