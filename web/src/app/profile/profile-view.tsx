@@ -27,12 +27,19 @@ import {
   initiateKyc,
   uploadProfilePhoto,
   mediaUrl,
+  listMyDocuments,
+  getMyDocumentOutstandingItems,
+  uploadMyDocument,
   type BrokerProfile,
   type OutstandingItem,
   type AssociationMembership,
   type AccessHistoryEntry,
   type Reconstruction,
+  type DocumentRecord,
+  type DocumentOutstandingItem,
 } from "@/lib/thriski-api";
+import { PROFILE_DOCUMENT_CATALOG } from "@/lib/document-catalog";
+import { DocumentChecklist } from "@/components/document-checklist";
 
 // Leaflet touches `window` at mount time — never safe to render during SSR.
 const AddressMap = dynamic(() => import("@/components/address-map").then((m) => m.AddressMap), { ssr: false });
@@ -149,22 +156,30 @@ export function ProfileView() {
   const [kycError, setKycError] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [documentOutstanding, setDocumentOutstanding] = useState<DocumentOutstandingItem[]>([]);
+  const [documentBusyType, setDocumentBusyType] = useState<string | null>(null);
+  const [documentUploadError, setDocumentUploadError] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, formState } = useForm<FormValues>();
 
   const editable = profile?.status === "draft" || profile?.status === "attention_required";
 
   const refresh = useCallback(async (activeToken: string) => {
-    const [freshProfile, items, associations, history] = await Promise.all([
+    const [freshProfile, items, associations, history, docs, docOutstanding] = await Promise.all([
       getMyProfile(activeToken),
       getOutstandingItems(activeToken),
       listAssociationMemberships(activeToken),
       listMyAccessHistory(activeToken),
+      listMyDocuments(activeToken),
+      getMyDocumentOutstandingItems(activeToken),
     ]);
     setProfile(freshProfile);
     setOutstanding(items);
     setMemberships(associations);
     setAccessHistory(history);
+    setDocuments(docs);
+    setDocumentOutstanding(docOutstanding);
     reset(profileToFormValues(freshProfile));
   }, [reset]);
 
@@ -266,6 +281,20 @@ export function ProfileView() {
       setPhotoError(err instanceof ApiError ? err.message : "Could not upload your photo.");
     } finally {
       setPhotoUploading(false);
+    }
+  }
+
+  async function onUploadDocument(documentType: string, file: File) {
+    if (!token) return;
+    setDocumentUploadError(null);
+    setDocumentBusyType(documentType);
+    try {
+      await uploadMyDocument(token, { documentType }, file);
+      await refresh(token);
+    } catch (err) {
+      setDocumentUploadError(err instanceof ApiError ? err.message : "Could not upload this document.");
+    } finally {
+      setDocumentBusyType(null);
     }
   }
 
@@ -467,6 +496,27 @@ export function ProfileView() {
                   </div>
                 )}
               </form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Documents</CardTitle>
+              <CardDescription>ONB-007/DOC-001. PDF, JPEG, PNG or HEIC, up to 15MB. Items marked * are required before submitting.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {token && (
+                <DocumentChecklist
+                  token={token}
+                  catalog={PROFILE_DOCUMENT_CATALOG}
+                  documents={documents}
+                  outstanding={documentOutstanding}
+                  editable={editable}
+                  onUpload={onUploadDocument}
+                  busyType={documentBusyType}
+                  uploadError={documentUploadError}
+                />
+              )}
             </CardContent>
           </Card>
 

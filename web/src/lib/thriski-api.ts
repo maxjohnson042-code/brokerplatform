@@ -589,6 +589,64 @@ export async function downloadDocument(token: string, evidenceId: string, filena
   URL.revokeObjectURL(url);
 }
 
+// ---- documents (ONB-007/DOC-001, src/modules/evidence) ----
+
+export type DocumentRecord = {
+  id: string;
+  document_type: string;
+  issue_date: string | null;
+  expiry_date: string | null;
+  issuing_body: string | null;
+  mime_type: string;
+  original_filename: string | null;
+  captured_at: string;
+};
+
+export type DocumentOutstandingItem = { field: string; reason: string };
+
+export type UploadDocumentInput = { documentType: string; issueDate?: string; expiryDate?: string; issuingBody?: string };
+
+async function uploadDocumentTo(path: string, token: string, input: UploadDocumentInput, file: File): Promise<{ id: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("documentType", input.documentType);
+  if (input.issueDate) formData.append("issueDate", input.issueDate);
+  if (input.expiryDate) formData.append("expiryDate", input.expiryDate);
+  if (input.issuingBody) formData.append("issuingBody", input.issuingBody);
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new ApiError(res.status, typeof data?.message === "string" ? data.message : res.statusText, data);
+  return data;
+}
+
+export function listMyDocuments(token: string): Promise<DocumentRecord[]> {
+  return apiFetch("/documents/broker-profile", { token });
+}
+
+export function getMyDocumentOutstandingItems(token: string): Promise<DocumentOutstandingItem[]> {
+  return apiFetch("/documents/broker-profile/outstanding-items", { token });
+}
+
+export function uploadMyDocument(token: string, input: UploadDocumentInput, file: File): Promise<{ id: string }> {
+  return uploadDocumentTo("/documents/broker-profile", token, input, file);
+}
+
+export function listBusinessDocuments(token: string, businessId: string): Promise<DocumentRecord[]> {
+  return apiFetch(`/documents/businesses/${businessId}`, { token });
+}
+
+export function getBusinessDocumentOutstandingItems(token: string, businessId: string): Promise<DocumentOutstandingItem[]> {
+  return apiFetch(`/documents/businesses/${businessId}/outstanding-items`, { token });
+}
+
+export function uploadBusinessDocument(token: string, businessId: string, input: UploadDocumentInput, file: File): Promise<{ id: string }> {
+  return uploadDocumentTo(`/documents/businesses/${businessId}`, token, input, file);
+}
+
 // ---- geocoding (map view for addresses, UI polish) ----
 
 export type GeocodeOutcome =
