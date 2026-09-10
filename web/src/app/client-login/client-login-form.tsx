@@ -65,7 +65,7 @@ export function ClientLoginForm() {
           ? await confirmClientMfaEnrolment(step.pendingToken, code)
           : await verifyClientMfa(step.pendingToken, code);
       storeClientToken(tokens.accessToken);
-      router.push("/client/relationships");
+      router.push("/client/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That code didn't work — please try again.");
     } finally {

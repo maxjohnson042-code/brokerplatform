@@ -46,6 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Lender",
     items: [
+      { href: "/client/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/client/relationships", label: "Broker panel", icon: Users },
       { href: "/client/queue", label: "Review queue", icon: ClipboardCheck },
       { href: "/client/settings", label: "Organisation settings", icon: Settings },
