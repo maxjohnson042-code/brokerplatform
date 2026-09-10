@@ -11,14 +11,32 @@ import {
  * Sumsub adapter — OQ-16 resolved, KYC (individual) only. This scaffold's original
  * comment described the request-signing as real against a stubbed transport; the
  * transport is now real too. Handles the individual-KYC hosted-link flow: create an
- * applicant, then request a one-time access token and construct the hosted
- * verification link from it (IDV-015: use Sumsub's own capture, don't build one).
+ * applicant, then generate a real external WebSDK link for it (IDV-015: use Sumsub's
+ * own capture, don't build one).
+ *
+ * The hosted link comes from POST /resources/sdkIntegrations/levels/-/websdkLink
+ * (https://docs.sumsub.com/reference/generate-websdk-external-link), NOT from
+ * POST /resources/accessTokens — that access-token endpoint is for initializing the
+ * embedded JS WebSDK client-side (snsWebSdk.init(token, ...)) and returns a token
+ * that is never itself a browsable URL. An earlier version of this adapter
+ * constructed a URL by hand from that access token (`${hostedLinkBaseUrl}/${token}`)
+ * — it happened to look like a plausible /websdk/p/<token> URL but Sumsub returned a
+ * real 404 for it, since it was never a real link in the first place. Found by
+ * actually clicking "Start verification" in the browser, not by reading the docs
+ * first — the constructed URL looked entirely legitimate.
  *
  * KYB (business) is deliberately NOT implemented here — see mock-kyb-adapter.ts.
  * Sumsub's KYB tier isn't provisioned on this account; when it is, KYB support is a
  * second `submit`/`poll` branch on this same class (or a second real adapter class),
  * never a change to anything that calls IdentityVerificationProvider.
  */
+class SumsubApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = 'SumsubApiError';
+  }
+}
+
 export class SumsubAdapter implements IdentityVerificationProvider {
   private sign(method: string, path: string, body: string, ts: number): string {
     return createHmac('sha256', env.sumsub.secretKey)
@@ -51,7 +69,7 @@ export class SumsubAdapter implements IdentityVerificationProvider {
 
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`Sumsub ${method} ${path} returned ${res.status}: ${text}`);
+      throw new SumsubApiError(res.status, `Sumsub ${method} ${path} returned ${res.status}: ${text}`);
     }
     return (text ? JSON.parse(text) : {}) as T;
   }
@@ -63,23 +81,38 @@ export class SumsubAdapter implements IdentityVerificationProvider {
     const externalUserId = subject.brokerProfileId;
     const levelName = env.sumsub.kycLevelName;
 
-    const applicant = await this.request<{ id: string }>('POST', `/resources/applicants?levelName=${encodeURIComponent(levelName)}`, {
-      externalUserId,
-      info: { firstName: subject.firstName, lastName: subject.lastName, dob: subject.dateOfBirth },
-    });
+    // A retry (the broker abandons the hosted flow and clicks "Start verification"
+    // again, or an earlier attempt failed after the applicant was created but before
+    // the link was) hits this with an externalUserId that already has an applicant —
+    // Sumsub enforces one applicant per externalUserId and returns 409, not an
+    // idempotent create. Fall back to fetching the existing one rather than treating
+    // this as a real failure.
+    let applicant: { id: string };
+    try {
+      applicant = await this.request<{ id: string }>('POST', `/resources/applicants?levelName=${encodeURIComponent(levelName)}`, {
+        externalUserId,
+        info: { firstName: subject.firstName, lastName: subject.lastName, dob: subject.dateOfBirth },
+      });
+    } catch (err) {
+      if (!(err instanceof SumsubApiError) || err.status !== 409) throw err;
+      applicant = await this.request<{ id: string }>(
+        'GET',
+        `/resources/applicants/-;externalUserId=${encodeURIComponent(externalUserId)}/one`,
+      );
+    }
 
-    // A one-time access token for the hosted verification flow — Sumsub's standard
-    // "get a token for this user/level" endpoint, used for both the embedded WebSDK
-    // and a hosted link. userId here is the SAME externalUserId passed above, per
-    // Sumsub's documented pairing of the two calls.
-    const accessToken = await this.request<{ token: string }>(
-      'POST',
-      `/resources/accessTokens?userId=${encodeURIComponent(externalUserId)}&levelName=${encodeURIComponent(levelName)}`,
-    );
+    // The real external-link endpoint — returns an actual browsable URL directly,
+    // no manual construction. userId is the SAME externalUserId passed above, so
+    // this link resolves to the applicant just created.
+    const link = await this.request<{ url: string }>('POST', '/resources/sdkIntegrations/levels/-/websdkLink', {
+      levelName,
+      ttlInSecs: 1800,
+      userId: externalUserId,
+    });
 
     return {
       providerApplicantId: applicant.id,
-      hostedLinkUrl: `${env.sumsub.hostedLinkBaseUrl}/${encodeURIComponent(accessToken.token)}`,
+      hostedLinkUrl: link.url,
     };
   }
 

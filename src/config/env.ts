@@ -35,11 +35,6 @@ export const env = {
     // subscription in their dashboard — this must match whatever's actually
     // configured there, not guessed.
     webhookDigestAlg: process.env.SUMSUB_WEBHOOK_DIGEST_ALG ?? 'sha256',
-    // The standard hosted-verification-link format at time of writing — confirm this
-    // against the current Sumsub docs/dashboard for this account before relying on it;
-    // Sumsub's API surface is versioned and this is the one piece of this adapter not
-    // copied from an existing working reference in this codebase.
-    hostedLinkBaseUrl: process.env.SUMSUB_HOSTED_LINK_BASE_URL ?? 'https://in.sumsub.com/websdk/p',
   },
   auth: {
     // Dev-only fallback, same pattern as appDatabaseUrl above — replace from a real
