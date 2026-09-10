@@ -93,6 +93,9 @@ export type BrokerProfile = {
   photo_url: string | null;
   status: string;
   attested_terms_at: string | null;
+  // Set once, the first time any of this broker's accreditations reaches 'active'
+  // (training.repository.ts's activateAccreditation) — null until then.
+  platform_broker_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -319,6 +322,11 @@ export type OrganisationRelationship = {
   document_count: number;
   accreditation_count: number;
   active_accreditation_count: number;
+  // Broker-mediated cross-org read (migration 0030) — the aggregator this broker is
+  // linked through, if any; never another lender's panel membership.
+  aggregator_organisation_name: string | null;
+  aggregator_organisation_logo_url: string | null;
+  association_names: string[] | null;
 };
 
 // broker actor

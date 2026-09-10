@@ -15,8 +15,11 @@ import {
   getClientOrganisationIdFromToken,
   listOrganisationRelationships,
   listAccreditationQueue,
+  getMyOrganisation,
+  mediaUrl,
   type OrganisationRelationship,
   type QueueAccreditation,
+  type MyOrganisation,
 } from "@/lib/thriski-api";
 
 // Statuses that sit awaiting a lender decision with no deadline of their own — still
@@ -36,7 +39,33 @@ const ATTENTION_RANK: Record<string, number> = {
   pending: 4,
 };
 
+const NEEDS_ACTION_DISPLAY_LIMIT = 10;
+
+function actionReason(status: string): string {
+  switch (status) {
+    case "exception_escalated":
+      return "Escalated for senior approval";
+    case "information_required":
+      return "Information requested";
+    case "party_changed_pending":
+      return "Party changed — needs re-review";
+    case "requested":
+      return "Awaiting your decision";
+    case "pending":
+      return "Training due soon";
+    default:
+      return "Needs review";
+  }
+}
+
+// Fixed display order for the association mix — Section 2.3's four options, plus a
+// bucket for brokers with none recorded. A broker with multiple memberships (e.g. both
+// MFAA and FBAA) counts toward every bucket it holds, not just one — that's real, not
+// a display bug.
+const ASSOCIATION_DISPLAY_ORDER = ["MFAA", "FBAA", "CAFBA", "AFCA", "None"];
+
 type Data = {
+  org: MyOrganisation;
   relationships: OrganisationRelationship[];
   accreditations: QueueAccreditation[];
 };
@@ -56,11 +85,12 @@ export function ClientDashboardView() {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async (activeToken: string, orgId: string) => {
-    const [relationships, accreditations] = await Promise.all([
+    const [org, relationships, accreditations] = await Promise.all([
+      getMyOrganisation(activeToken),
       listOrganisationRelationships(activeToken),
       listAccreditationQueue(activeToken, orgId),
     ]);
-    setData({ relationships, accreditations });
+    setData({ org, relationships, accreditations });
   }, []);
 
   useEffect(() => {
@@ -101,7 +131,7 @@ export function ClientDashboardView() {
     );
   }
 
-  const { relationships, accreditations } = data;
+  const { org, relationships, accreditations } = data;
 
   const activeRelationships = relationships.filter((r) => r.status === "active");
   const brokersOnPanel = new Set(activeRelationships.map((r) => r.broker_profile_id)).size;
@@ -128,15 +158,42 @@ export function ClientDashboardView() {
     }
   }
 
-  const sortedNeedsAction = [...needsActionAccreditations]
-    .sort((a, b) => {
-      const rankDiff = (ATTENTION_RANK[a.status] ?? 9) - (ATTENTION_RANK[b.status] ?? 9);
-      if (rankDiff !== 0) return rankDiff;
-      const aDeadline = a.training_deadline_at ? new Date(a.training_deadline_at).getTime() : Infinity;
-      const bDeadline = b.training_deadline_at ? new Date(b.training_deadline_at).getTime() : Infinity;
-      return aDeadline - bDeadline;
-    })
-    .slice(0, 5);
+  // A broker with multiple association memberships counts toward every bucket it
+  // holds — deliberate, see ASSOCIATION_DISPLAY_ORDER's own comment.
+  const associationMix: Record<string, number> = {};
+  for (const r of activeRelationships) {
+    const names = r.association_names ?? [];
+    if (names.length === 0) {
+      associationMix.None = (associationMix.None ?? 0) + 1;
+    } else {
+      for (const name of names) associationMix[name] = (associationMix[name] ?? 0) + 1;
+    }
+  }
+  const associationDisplayNames = [
+    ...ASSOCIATION_DISPLAY_ORDER,
+    ...Object.keys(associationMix).filter((name) => !ASSOCIATION_DISPLAY_ORDER.includes(name)),
+  ];
+
+  const aggregatorMix = new Map<string, number>();
+  let directBrokerCount = 0;
+  for (const r of activeRelationships) {
+    if (r.aggregator_organisation_name) {
+      aggregatorMix.set(r.aggregator_organisation_name, (aggregatorMix.get(r.aggregator_organisation_name) ?? 0) + 1);
+    } else {
+      directBrokerCount += 1;
+    }
+  }
+  const aggregatorMixEntries = [...aggregatorMix.entries()].sort((a, b) => b[1] - a[1]);
+
+  const sortedNeedsAction = [...needsActionAccreditations].sort((a, b) => {
+    const rankDiff = (ATTENTION_RANK[a.status] ?? 9) - (ATTENTION_RANK[b.status] ?? 9);
+    if (rankDiff !== 0) return rankDiff;
+    const aDeadline = a.training_deadline_at ? new Date(a.training_deadline_at).getTime() : Infinity;
+    const bDeadline = b.training_deadline_at ? new Date(b.training_deadline_at).getTime() : Infinity;
+    return aDeadline - bDeadline;
+  });
+  const needsActionDisplayed = sortedNeedsAction.slice(0, NEEDS_ACTION_DISPLAY_LIMIT);
+  const needsActionRemaining = sortedNeedsAction.length - needsActionDisplayed.length;
 
   const deactivatedItems: DeactivatedItem[] = [
     ...endedOrRevoked.map((r) => ({
@@ -159,9 +216,23 @@ export function ClientDashboardView() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Lender dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">An overview of your broker panel.</p>
+      <div className="mb-6 flex items-center gap-4">
+        {org.branding.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={mediaUrl(org.branding.logoUrl)}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-md border border-border bg-card object-contain p-1"
+          />
+        ) : (
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-secondary text-sm font-semibold text-secondary-foreground">
+            {org.name.slice(0, 2).toUpperCase()}
+          </div>
+        )}
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{org.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Lender dashboard — an overview of your broker panel.</p>
+        </div>
       </div>
 
       <div className="mb-6 grid gap-6 sm:grid-cols-3">
@@ -203,11 +274,11 @@ export function ClientDashboardView() {
             <CardDescription>Awaiting your review, or training due soon.</CardDescription>
           </CardHeader>
           <CardContent>
-            {sortedNeedsAction.length === 0 ? (
+            {needsActionDisplayed.length === 0 ? (
               <p className="text-sm text-status-success-fg">Nothing outstanding.</p>
             ) : (
               <ul className="space-y-2">
-                {sortedNeedsAction.map((a) => {
+                {needsActionDisplayed.map((a) => {
                   const brokerName = a.broker_first_name && a.broker_last_name ? `${a.broker_first_name} ${a.broker_last_name}` : "Unnamed broker";
                   const training = a.status === "pending" && a.training_deadline_at ? trainingDeadlineLabel(a.training_deadline_at) : null;
                   return (
@@ -219,7 +290,7 @@ export function ClientDashboardView() {
                         <div>
                           <p className="text-foreground">{brokerName}</p>
                           <p className="text-xs text-muted-foreground">
-                            {a.business_legal_name ?? "Unnamed business"}
+                            {a.business_legal_name ?? "Unnamed business"} · {actionReason(a.status)}
                             {training && <span className={training.overdue ? "font-medium text-status-danger-fg" : undefined}> · {training.label}</span>}
                             {!training && ` · ${requestedAgoLabel(a.requested_at)}`}
                           </p>
@@ -232,7 +303,7 @@ export function ClientDashboardView() {
               </ul>
             )}
             <Link href="/client/queue" className="mt-3 inline-block text-xs font-medium text-primary hover:underline">
-              View full queue →
+              {needsActionRemaining > 0 ? `+${needsActionRemaining} more — view full queue →` : "View full queue →"}
             </Link>
           </CardContent>
         </Card>
@@ -270,34 +341,74 @@ export function ClientDashboardView() {
         </Card>
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Verification status</CardTitle>
-          <CardDescription>Across {activeRelationships.length} active broker{activeRelationships.length === 1 ? "" : "s"}.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-6 text-sm">
-            <div>
-              <p className="text-lg font-semibold text-status-success-fg">{verificationBuckets.verified}</p>
-              <p className="text-xs text-muted-foreground">Verified</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-status-info-fg">{verificationBuckets.inProgress}</p>
-              <p className="text-xs text-muted-foreground">In progress</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-status-warning-fg">{verificationBuckets.attention}</p>
-              <p className="text-xs text-muted-foreground">Needs attention</p>
-            </div>
-            {verificationBuckets.other > 0 && (
-              <div>
-                <p className="text-lg font-semibold text-muted-foreground">{verificationBuckets.other}</p>
-                <p className="text-xs text-muted-foreground">Other</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Verification status</CardTitle>
+            <CardDescription>Across {activeRelationships.length} active broker{activeRelationships.length === 1 ? "" : "s"}.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+              <li>
+                <p className="text-lg font-semibold text-status-success-fg">{verificationBuckets.verified}</p>
+                <p className="text-xs text-muted-foreground">Verified</p>
+              </li>
+              <li>
+                <p className="text-lg font-semibold text-status-info-fg">{verificationBuckets.inProgress}</p>
+                <p className="text-xs text-muted-foreground">In progress</p>
+              </li>
+              <li>
+                <p className="text-lg font-semibold text-status-warning-fg">{verificationBuckets.attention}</p>
+                <p className="text-xs text-muted-foreground">Needs attention</p>
+              </li>
+              {verificationBuckets.other > 0 && (
+                <li>
+                  <p className="text-lg font-semibold text-muted-foreground">{verificationBuckets.other}</p>
+                  <p className="text-xs text-muted-foreground">Other</p>
+                </li>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Association mix</CardTitle>
+            <CardDescription>Membership standing across your panel.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+              {associationDisplayNames.map((name) => (
+                <li key={name}>
+                  <p className="text-lg font-semibold text-foreground">{associationMix[name] ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">{name}</p>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Aggregator mix</CardTitle>
+            <CardDescription>Which aggregator each broker comes through.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+              <li>
+                <p className="text-lg font-semibold text-foreground">{directBrokerCount}</p>
+                <p className="text-xs text-muted-foreground">Direct — no aggregator</p>
+              </li>
+              {aggregatorMixEntries.map(([name, count]) => (
+                <li key={name}>
+                  <p className="text-lg font-semibold text-foreground">{count}</p>
+                  <p className="text-xs text-muted-foreground">{name}</p>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

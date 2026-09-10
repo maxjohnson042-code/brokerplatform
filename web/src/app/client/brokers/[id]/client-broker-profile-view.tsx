@@ -135,6 +135,9 @@ export function ClientBrokerProfileView({ brokerId }: { brokerId: string }) {
             {profile.email}
             {profile.phone_number && ` · ${profile.phone_number}`}
           </p>
+          {profile.platform_broker_id && (
+            <p className="font-mono text-xs text-muted-foreground">Broker ID: {profile.platform_broker_id}</p>
+          )}
         </div>
         <LabeledStatusBadge label="Profile" domain="profile" value={profile.status} />
       </div>

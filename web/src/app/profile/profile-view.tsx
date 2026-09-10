@@ -363,6 +363,9 @@ export function ProfileView() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Your profile</h1>
             <p className="mt-1 text-sm text-muted-foreground">{profile.email}</p>
+            {profile.platform_broker_id && (
+              <p className="mt-1 font-mono text-xs text-muted-foreground">Broker ID: {profile.platform_broker_id}</p>
+            )}
             {photoError && <p className="mt-1 text-xs text-destructive">{photoError}</p>}
           </div>
         </div>
