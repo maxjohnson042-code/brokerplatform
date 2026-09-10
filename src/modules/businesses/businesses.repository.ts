@@ -546,6 +546,32 @@ export async function listMyAffiliations(
   });
 }
 
+/**
+ * Client-facing sibling of listMyAffiliations — same shape, scoped by an explicit
+ * brokerId rather than ctx.actorId, active affiliations only (a lender reading a
+ * broker's profile from client-broker-view.controller.ts has no reason to see the
+ * broker's ended/pending business history the way the broker's own REL-005-style view
+ * does). broker_businesses_visibility's RLS (migration 0021) already gates this to a
+ * client_user holding an active lender_panel/aggregator_membership relationship.
+ */
+export async function listAffiliationsForBroker(
+  ctx: AuthorizationContext,
+  brokerProfileId: string,
+): Promise<Array<Record<string, unknown>>> {
+  return withAuthorizationContext(ctx, async (client) => {
+    const { rows } = await client.query(
+      `SELECT ba.id, ba.broker_business_id, ba.role, ba.status, ba.started_at,
+              bb.legal_name, bb.trading_name, bb.entity_type, bb.status AS business_status
+       FROM business_affiliations ba
+       JOIN broker_businesses bb ON bb.id = ba.broker_business_id
+       WHERE ba.broker_profile_id = $1 AND ba.status = 'active'
+       ORDER BY ba.started_at DESC`,
+      [brokerProfileId],
+    );
+    return rows;
+  });
+}
+
 /** For an actively-affiliated broker to see who else is confirmed/pending on their business. */
 export async function listBusinessAffiliations(
   ctx: AuthorizationContext,

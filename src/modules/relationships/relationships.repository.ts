@@ -340,6 +340,32 @@ export async function listMyRelationships(
 }
 
 /**
+ * App-layer half of the belt-and-braces check for the lender's-point-of-view broker
+ * routes (client-broker-view.controller.ts) — RLS (migration 0021's
+ * has_active_relationship) is the brace and already scopes every read those routes
+ * make, but an unrelated brokerId should 403 explicitly rather than silently returning
+ * empty results from five different endpoints. Runs under the caller's own ctx:
+ * relationships itself has RLS scoping a client_user to their own org's rows
+ * (migration 0021), so no separate clientOrganisationId parameter is needed here — a
+ * client_user simply cannot see another org's relationship rows at all.
+ */
+export async function hasActiveRelationshipWithBroker(
+  ctx: AuthorizationContext,
+  brokerProfileId: string,
+): Promise<boolean> {
+  return withAuthorizationContext(ctx, async (client) => {
+    const { rows } = await client.query(
+      `SELECT 1 FROM relationships
+       WHERE broker_profile_id = $1 AND status = 'active' AND effective_to IS NULL
+         AND type IN ('lender_panel', 'aggregator_membership')
+       LIMIT 1`,
+      [brokerProfileId],
+    );
+    return rows.length > 0;
+  });
+}
+
+/**
  * The client-side symmetric view — not a numbered REL-* ticket itself, but required
  * for the invite/accept flow and REL-005's "one view" to be usable from the client
  * side too. LEFT JOIN broker_profiles: a broker with only a pending, not-yet-accepted

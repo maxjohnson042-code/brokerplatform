@@ -238,25 +238,67 @@ export async function requestAccreditation(
 
 export type QueueFilters = { status?: AccreditationStatus; classification?: AccreditationClassification; productScope?: string };
 
-export async function listQueue(ctx: AuthorizationContext, lenderClientOrganisationId: string, filters: QueueFilters = {}): Promise<Accreditation[]> {
+// Broker/business identity, joined in for the review queue's list rows (previously
+// bare brand/role/status, no broker name at all) — pg returns experience_years as a
+// string, same as broker_profiles' own type (see getOutstandingItems's Number() cast
+// above). LEFT JOIN, not JOIN: broker_profiles_visibility/broker_businesses_visibility
+// (migration 0021) still require an ACTIVE relationship/affiliation to show these
+// columns — an accreditation whose relationship has since ended keeps its row, just
+// with null identity columns, same defensive shape listMyAffiliations/
+// listOrganisationRelationships already use.
+export type QueueAccreditation = Accreditation & {
+  broker_first_name: string | null;
+  broker_last_name: string | null;
+  experience_years: string | null;
+  business_legal_name: string | null;
+};
+
+export async function listQueue(ctx: AuthorizationContext, lenderClientOrganisationId: string, filters: QueueFilters = {}): Promise<QueueAccreditation[]> {
   return withAuthorizationContext(ctx, async (client) => {
-    const conditions = ['lender_client_organisation_id = $1'];
+    const conditions = ['a.lender_client_organisation_id = $1'];
     const params: unknown[] = [lenderClientOrganisationId];
     if (filters.status) {
       params.push(filters.status);
-      conditions.push(`status = $${params.length}`);
+      conditions.push(`a.status = $${params.length}`);
     }
     if (filters.classification) {
       params.push(filters.classification);
-      conditions.push(`classification = $${params.length}`);
+      conditions.push(`a.classification = $${params.length}`);
     }
     if (filters.productScope) {
       params.push(filters.productScope);
-      conditions.push(`product_scope = $${params.length}`);
+      conditions.push(`a.product_scope = $${params.length}`);
     }
-    const { rows } = await client.query<Accreditation>(
-      `SELECT * FROM accreditations WHERE ${conditions.join(' AND ')} ORDER BY requested_at DESC`,
+    const { rows } = await client.query<QueueAccreditation>(
+      `SELECT a.*, bp.first_name AS broker_first_name, bp.last_name AS broker_last_name, bp.experience_years,
+              bb.legal_name AS business_legal_name
+       FROM accreditations a
+       LEFT JOIN broker_profiles bp ON bp.id = a.broker_profile_id
+       LEFT JOIN broker_businesses bb ON bb.id = a.broker_business_id
+       WHERE ${conditions.join(' AND ')} ORDER BY a.requested_at DESC`,
       params,
+    );
+    return rows;
+  });
+}
+
+/**
+ * The lender's-point-of-view accreditation history for one broker — same filter shape
+ * as listQueue (a plain WHERE on lender_client_organisation_id), with broker_profile_id
+ * added and no status filter, since this is "everything this broker has ever had with
+ * us," not a workbench queue. Backs the new broker-profile page's history section
+ * (client-broker-view.controller.ts); accreditations_visibility's RLS already scopes a
+ * client_user to their own org's rows, same as listQueue.
+ */
+export async function listForBrokerAndLender(
+  ctx: AuthorizationContext,
+  lenderClientOrganisationId: string,
+  brokerProfileId: string,
+): Promise<Accreditation[]> {
+  return withAuthorizationContext(ctx, async (client) => {
+    const { rows } = await client.query<Accreditation>(
+      `SELECT * FROM accreditations WHERE lender_client_organisation_id = $1 AND broker_profile_id = $2 ORDER BY requested_at DESC`,
+      [lenderClientOrganisationId, brokerProfileId],
     );
     return rows;
   });
