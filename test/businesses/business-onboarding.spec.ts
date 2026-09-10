@@ -8,7 +8,19 @@
  * search+affiliate flow needs one, so this test seeds it directly via a system-actor
  * query, the same test-only workaround scripts/demo-tenancy.ts already uses for
  * check results.
+ *
+ * The ABN-lookup tests below need env.abrAbnLookup.guid to be unset regardless of
+ * what a developer's own .env actually has configured for real dev use — env.ts
+ * reads process.env once at import time, so this has to be a module mock in place
+ * before BusinessesModule (and everything it transitively imports) first pulls env.ts
+ * in, not a process.env mutation in a beforeAll. ts-jest doesn't hoist jest.mock the
+ * way babel-jest does, so this has to sit textually above the imports it must
+ * pre-empt, not just before the code that uses them.
  */
+jest.mock('../../src/config/env', () => ({
+  env: { ...jest.requireActual('../../src/config/env').env, abrAbnLookup: { guid: '' } },
+}));
+
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -219,7 +231,7 @@ describe('broker business onboarding (BUS-001/003-008/013-015)', () => {
       .expect(404);
   });
 
-  it('ABN lookup degrades gracefully over HTTP when no registry GUID is configured (this test env\'s actual state)', async () => {
+  it('ABN lookup degrades gracefully over HTTP when no registry GUID is configured', async () => {
     const token = await registerAndLogin(`lookup-${Date.now()}`);
 
     const validAbn = await request(app.getHttpServer())
@@ -238,11 +250,11 @@ describe('broker business onboarding (BUS-001/003-008/013-015)', () => {
   it('search surfaces a registry match only when nothing on the platform already matches', async () => {
     const token = await registerAndLogin(`search-registry-${Date.now()}`);
 
-    // No GUID configured in this test env, so even a well-formed, unused ABN comes
-    // back with no platform match AND no registry match (not_configured, not found) —
-    // proves the shape (platformMatches: [], registryMatch: null), not the live
-    // registry integration itself (covered without a real network call in
-    // abn-lookup.spec.ts).
+    // GUID forced unset for this file (see the module mock above), so even a
+    // well-formed, unused ABN comes back with no platform match AND no registry match
+    // (not_configured, not found) — proves the shape (platformMatches: [],
+    // registryMatch: null), not the live registry integration itself (covered without
+    // a real network call in abn-lookup.spec.ts).
     const res = await request(app.getHttpServer())
       .get('/businesses/search?abn=53004085616')
       .set('Authorization', `Bearer ${token}`)
