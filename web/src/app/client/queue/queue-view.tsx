@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
-import { StatusBadge } from "@/components/status-badge";
+import { StatusBadge, LabeledStatusBadge } from "@/components/status-badge";
 import {
   ApiError,
   clearClientToken,
@@ -135,8 +135,8 @@ export function QueueView() {
                     <StatusBadge domain="accreditation" value={a.status} />
                   </CardHeader>
                   <CardContent className="flex flex-wrap items-center gap-2 pb-3 pt-0">
-                    {a.broker_profile_status && <StatusBadge domain="profile" value={a.broker_profile_status} />}
-                    {a.business_status && <StatusBadge domain="business" value={a.business_status} />}
+                    {a.broker_profile_status && <LabeledStatusBadge label="Profile" domain="profile" value={a.broker_profile_status} />}
+                    {a.business_status && <LabeledStatusBadge label="Business" domain="business" value={a.business_status} />}
                     {a.current_decision_step === "senior_approver" && (
                       <span className="inline-flex items-center rounded-full bg-status-warning-bg px-2.5 py-0.5 text-xs font-medium text-status-warning-fg">
                         Escalated — senior approver required

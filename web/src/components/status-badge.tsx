@@ -35,3 +35,26 @@ export function StatusBadge({
     </span>
   );
 }
+
+// Profile and business status share the exact same label vocabulary (draft/submitted/
+// verified/...), so two bare badges sitting next to each other — the review queue and
+// broker panel rows, the broker-profile page's header + business list — read as two
+// identical, unexplained "Submitted" pills. A short caption in front of each fixes
+// that without touching the underlying vocabulary, which is fine on its own wherever
+// only one badge is shown (the broker's own /profile, /business pages).
+export function LabeledStatusBadge({
+  label,
+  domain,
+  value,
+}: {
+  label: string;
+  domain: StatusDomain;
+  value: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <StatusBadge domain={domain} value={value} />
+    </span>
+  );
+}

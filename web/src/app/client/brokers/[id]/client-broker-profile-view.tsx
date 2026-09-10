@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/status-badge";
+import { StatusBadge, LabeledStatusBadge } from "@/components/status-badge";
 import {
   ApiError,
   clearClientToken,
@@ -136,7 +136,7 @@ export function ClientBrokerProfileView({ brokerId }: { brokerId: string }) {
             {profile.phone_number && ` · ${profile.phone_number}`}
           </p>
         </div>
-        <StatusBadge domain="profile" value={profile.status} />
+        <LabeledStatusBadge label="Profile" domain="profile" value={profile.status} />
       </div>
 
       {relationship && (
@@ -214,7 +214,7 @@ export function ClientBrokerProfileView({ brokerId }: { brokerId: string }) {
                     <p className="font-medium text-foreground">{b.legal_name ?? b.trading_name ?? "Unnamed business"}</p>
                     <p className="text-xs text-muted-foreground">{b.entity_type?.replace(/_/g, " ")} · {b.role}</p>
                   </div>
-                  {b.business_status && <StatusBadge domain="business" value={b.business_status} />}
+                  {b.business_status && <LabeledStatusBadge label="Business" domain="business" value={b.business_status} />}
                 </li>
               ))}
             </ul>

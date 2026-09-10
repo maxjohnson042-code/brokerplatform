@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { StatusBadge } from "@/components/status-badge";
+import { StatusBadge, LabeledStatusBadge } from "@/components/status-badge";
 import {
   ApiError,
   clearClientToken,
@@ -213,8 +213,8 @@ export function ClientRelationshipsView() {
                 </CardHeader>
                 {r.status === "active" && (
                   <CardContent className="flex flex-wrap items-center gap-2 pb-3 pt-0">
-                    {r.broker_profile_status && <StatusBadge domain="profile" value={r.broker_profile_status} />}
-                    {r.business_status && <StatusBadge domain="business" value={r.business_status} />}
+                    {r.broker_profile_status && <LabeledStatusBadge label="Profile" domain="profile" value={r.broker_profile_status} />}
+                    {r.business_status && <LabeledStatusBadge label="Business" domain="business" value={r.business_status} />}
                   </CardContent>
                 )}
                 {r.status === "active" && (
