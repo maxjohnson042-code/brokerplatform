@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/status-badge";
 import {
   ApiError,
@@ -14,8 +16,12 @@ import {
   acceptInvitation,
   declineInvitation,
   revokeRelationship,
+  listDiscoverableOrganisations,
+  requestRelationship,
   mediaUrl,
   type MyRelationship,
+  type RelationshipType,
+  type DiscoverableOrganisation,
 } from "@/lib/thriski-api";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -23,6 +29,15 @@ const TYPE_LABELS: Record<string, string> = {
   aggregator_membership: "Aggregator",
   association_membership: "Association membership",
 };
+
+// REL-001's type selector -> the org-discovery type filter, and back to the
+// relationship type requestRelationship actually needs — same three options, two
+// different vocabularies (client_organisations.type vs relationships.type).
+const LINK_OPTIONS: Array<{ orgType: "lender" | "aggregator" | "association"; relationshipType: RelationshipType; label: string }> = [
+  { orgType: "lender", relationshipType: "lender_panel", label: "Lender" },
+  { orgType: "aggregator", relationshipType: "aggregator_membership", label: "Aggregator" },
+  { orgType: "association", relationshipType: "association_membership", label: "Association" },
+];
 
 // PRF-005: "who is my data shared with, and what can they see" — shared_data_scope
 // itself (SHARED_DATA_SCOPE in relationships.repository.ts) is server-side only, so
@@ -41,11 +56,24 @@ export function RelationshipsView() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [revokeReasonById, setRevokeReasonById] = useState<Record<string, string>>({});
+  const [linkOrgType, setLinkOrgType] = useState<(typeof LINK_OPTIONS)[number]["orgType"]>("lender");
+  const [discoverable, setDiscoverable] = useState<DiscoverableOrganisation[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const refresh = useCallback(async (activeToken: string) => {
     const rows = await listMyRelationships(activeToken);
     setRelationships(rows);
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    setSelectedOrgId("");
+    listDiscoverableOrganisations(token, linkOrgType)
+      .then(setDiscoverable)
+      .catch((err) => setLinkError(err instanceof ApiError ? err.message : "Could not load organisations."));
+  }, [token, linkOrgType]);
 
   useEffect(() => {
     const stored = getStoredToken();
@@ -75,6 +103,22 @@ export function RelationshipsView() {
       setActionError(err instanceof ApiError ? err.message : "That action didn't go through — please try again.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function onRequestLink() {
+    if (!token || !selectedOrgId) return;
+    const relationshipType = LINK_OPTIONS.find((o) => o.orgType === linkOrgType)!.relationshipType;
+    setLinking(true);
+    setLinkError(null);
+    try {
+      await requestRelationship(token, { clientOrganisationId: selectedOrgId, type: relationshipType, consentVersion: "v1" });
+      setSelectedOrgId("");
+      await refresh(token);
+    } catch (err) {
+      setLinkError(err instanceof ApiError ? err.message : "Could not link to this organisation.");
+    } finally {
+      setLinking(false);
     }
   }
 
@@ -120,6 +164,53 @@ export function RelationshipsView() {
           {actionError}
         </p>
       )}
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Link to an organisation</CardTitle>
+          <CardDescription>REL-001 — search for a lender, aggregator or association and request to link.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Type" htmlFor="linkOrgType">
+              <Select
+                id="linkOrgType"
+                value={linkOrgType}
+                onChange={(e) => setLinkOrgType(e.target.value as (typeof LINK_OPTIONS)[number]["orgType"])}
+              >
+                {LINK_OPTIONS.map((o) => (
+                  <option key={o.orgType} value={o.orgType}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Organisation" htmlFor="linkOrgId">
+              <Select id="linkOrgId" value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)}>
+                <option value="">Select…</option>
+                {discoverable.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </Select>
+              {discoverable.length === 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">No verified {linkOrgType}s available to link to yet.</p>
+              )}
+            </Field>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {SCOPE_DESCRIPTIONS[
+              linkOrgType === "lender" ? "lender_full" : linkOrgType === "aggregator" ? "aggregator_full" : "association_membership_only"
+            ]}{" "}
+            By requesting, you consent to sharing this with them.
+          </p>
+          {linkError && <p className="text-xs text-destructive">{linkError}</p>}
+          <Button type="button" size="sm" disabled={!selectedOrgId || linking} onClick={onRequestLink}>
+            {linking ? "Linking…" : "Request"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {relationships.length === 0 ? (
         <Card>

@@ -319,6 +319,20 @@ export function listMyRelationships(token: string): Promise<MyRelationship[]> {
   return apiFetch("/relationships/me", { token });
 }
 
+// REL-001: what a broker can search/select from before any relationship exists.
+export type DiscoverableOrganisation = { id: string; name: string; type: "lender" | "aggregator" | "association"; logo_url: string | null };
+
+export function listDiscoverableOrganisations(token: string, type?: "lender" | "aggregator" | "association"): Promise<DiscoverableOrganisation[]> {
+  return apiFetch(`/relationships/discoverable-organisations${type ? `?type=${type}` : ""}`, { token });
+}
+
+export function requestRelationship(
+  token: string,
+  input: { clientOrganisationId: string; type: RelationshipType; consentVersion: string },
+): Promise<{ id: string }> {
+  return apiFetch("/relationships", { method: "POST", token, body: JSON.stringify(input) });
+}
+
 export function acceptInvitation(token: string, id: string, consentVersion: string): Promise<{ ok: true }> {
   return apiFetch(`/relationships/${id}/accept`, { method: "POST", token, body: JSON.stringify({ consentVersion }) });
 }
