@@ -69,7 +69,7 @@ function isActive(pathname: string, href: string): boolean {
 function Brand() {
   return (
     <Link href="/" className="flex items-center">
-      <BrandMark className="text-lg" />
+      <BrandMark />
     </Link>
   );
 }
