@@ -64,6 +64,41 @@ function actionReason(status: string): string {
 // a display bug.
 const ASSOCIATION_DISPLAY_ORDER = ["MFAA", "FBAA", "CAFBA", "AFCA", "None"];
 
+type MixEntry = { key: string; label: string; count: number; logoUrl?: string | null };
+
+// Horizontal proportional bars read far better than flex-wrapped stat tiles once a
+// list has more than 3-4 entries — the aggregator mix can have up to 11 (10
+// aggregators + "Direct"). logoUrl is optional per-entry: association rows omit it
+// entirely (no logo concept for an association), aggregator rows always pass it
+// (null renders an initial-letter fallback square) so every row in that list lines up.
+function MixBarList({ entries }: { entries: MixEntry[] }) {
+  const max = Math.max(1, ...entries.map((e) => e.count));
+  return (
+    <ul className="space-y-2.5">
+      {entries.map((e) => (
+        <li key={e.key} className="flex items-center gap-3">
+          {e.logoUrl !== undefined &&
+            (e.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={mediaUrl(e.logoUrl)} alt="" className="h-5 w-5 shrink-0 rounded border border-border bg-card object-contain" />
+            ) : (
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-secondary text-[9px] font-semibold text-secondary-foreground">
+                {e.label.slice(0, 1).toUpperCase()}
+              </div>
+            ))}
+          <span className="w-36 shrink-0 truncate text-sm text-foreground" title={e.label}>
+            {e.label}
+          </span>
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${(e.count / max) * 100}%` }} />
+          </div>
+          <span className="w-6 shrink-0 text-right text-sm font-medium text-foreground">{e.count}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 type Data = {
   org: MyOrganisation;
   relationships: OrganisationRelationship[];
@@ -174,16 +209,31 @@ export function ClientDashboardView() {
     ...Object.keys(associationMix).filter((name) => !ASSOCIATION_DISPLAY_ORDER.includes(name)),
   ];
 
-  const aggregatorMix = new Map<string, number>();
+  const aggregatorMix = new Map<string, { count: number; logoUrl: string | null }>();
   let directBrokerCount = 0;
   for (const r of activeRelationships) {
     if (r.aggregator_organisation_name) {
-      aggregatorMix.set(r.aggregator_organisation_name, (aggregatorMix.get(r.aggregator_organisation_name) ?? 0) + 1);
+      const existing = aggregatorMix.get(r.aggregator_organisation_name);
+      aggregatorMix.set(r.aggregator_organisation_name, {
+        count: (existing?.count ?? 0) + 1,
+        logoUrl: existing?.logoUrl ?? r.aggregator_organisation_logo_url ?? null,
+      });
     } else {
       directBrokerCount += 1;
     }
   }
-  const aggregatorMixEntries = [...aggregatorMix.entries()].sort((a, b) => b[1] - a[1]);
+
+  const associationMixEntries: MixEntry[] = associationDisplayNames.map((name) => ({
+    key: name,
+    label: name,
+    count: associationMix[name] ?? 0,
+  }));
+  const aggregatorMixEntries: MixEntry[] = [
+    { key: "direct", label: "Direct — no aggregator", count: directBrokerCount, logoUrl: null },
+    ...[...aggregatorMix.entries()]
+      .map(([name, v]) => ({ key: name, label: name, count: v.count, logoUrl: v.logoUrl }))
+      .sort((a, b) => b.count - a.count),
+  ];
 
   const sortedNeedsAction = [...needsActionAccreditations].sort((a, b) => {
     const rankDiff = (ATTENTION_RANK[a.status] ?? 9) - (ATTENTION_RANK[b.status] ?? 9);
@@ -341,50 +391,14 @@ export function ClientDashboardView() {
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Verification status</CardTitle>
-            <CardDescription>Across {activeRelationships.length} active broker{activeRelationships.length === 1 ? "" : "s"}.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-              <li>
-                <p className="text-lg font-semibold text-status-success-fg">{verificationBuckets.verified}</p>
-                <p className="text-xs text-muted-foreground">Verified</p>
-              </li>
-              <li>
-                <p className="text-lg font-semibold text-status-info-fg">{verificationBuckets.inProgress}</p>
-                <p className="text-xs text-muted-foreground">In progress</p>
-              </li>
-              <li>
-                <p className="text-lg font-semibold text-status-warning-fg">{verificationBuckets.attention}</p>
-                <p className="text-xs text-muted-foreground">Needs attention</p>
-              </li>
-              {verificationBuckets.other > 0 && (
-                <li>
-                  <p className="text-lg font-semibold text-muted-foreground">{verificationBuckets.other}</p>
-                  <p className="text-xs text-muted-foreground">Other</p>
-                </li>
-              )}
-            </ul>
-          </CardContent>
-        </Card>
-
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Association mix</CardTitle>
             <CardDescription>Membership standing across your panel.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-              {associationDisplayNames.map((name) => (
-                <li key={name}>
-                  <p className="text-lg font-semibold text-foreground">{associationMix[name] ?? 0}</p>
-                  <p className="text-xs text-muted-foreground">{name}</p>
-                </li>
-              ))}
-            </ul>
+            <MixBarList entries={associationMixEntries} />
           </CardContent>
         </Card>
 
@@ -394,21 +408,39 @@ export function ClientDashboardView() {
             <CardDescription>Which aggregator each broker comes through.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-              <li>
-                <p className="text-lg font-semibold text-foreground">{directBrokerCount}</p>
-                <p className="text-xs text-muted-foreground">Direct — no aggregator</p>
-              </li>
-              {aggregatorMixEntries.map(([name, count]) => (
-                <li key={name}>
-                  <p className="text-lg font-semibold text-foreground">{count}</p>
-                  <p className="text-xs text-muted-foreground">{name}</p>
-                </li>
-              ))}
-            </ul>
+            <MixBarList entries={aggregatorMixEntries} />
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Verification status</CardTitle>
+          <CardDescription>Across {activeRelationships.length} active broker{activeRelationships.length === 1 ? "" : "s"}.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+            <li>
+              <p className="text-lg font-semibold text-status-success-fg">{verificationBuckets.verified}</p>
+              <p className="text-xs text-muted-foreground">Verified</p>
+            </li>
+            <li>
+              <p className="text-lg font-semibold text-status-info-fg">{verificationBuckets.inProgress}</p>
+              <p className="text-xs text-muted-foreground">In progress</p>
+            </li>
+            <li>
+              <p className="text-lg font-semibold text-status-warning-fg">{verificationBuckets.attention}</p>
+              <p className="text-xs text-muted-foreground">Needs attention</p>
+            </li>
+            {verificationBuckets.other > 0 && (
+              <li>
+                <p className="text-lg font-semibold text-muted-foreground">{verificationBuckets.other}</p>
+                <p className="text-xs text-muted-foreground">Other</p>
+              </li>
+            )}
+          </ul>
+        </CardContent>
+      </Card>
     </div>
   );
 }
